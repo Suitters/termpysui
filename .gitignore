@@ -1,0 +1,15 @@
+
+.DS_Store
+.python-version
+Pipfile.lock
+__pycache__
+/build
+/dist
+**/*.egg-info
+.pytest_cache
+
+temp_*.py
+
+
+
+

@@ -1,0 +1,46 @@
+{
+
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true,
+  "python.testing.autoTestDiscoverOnSaveEnabled": true,
+  "python.testing.pytestArgs": [
+    "${workspaceFolder}/tests"
+  ],
+  "pylint.args": [
+    "----extension-pkg-whitelist=1xml",
+    "--max-line-length",
+    "80",
+    "--disable",
+    "wrong-import-position",
+    "--disable",
+    "global-statement",
+    "--disable",
+    "import-outside-toplevel",
+    "--disable",
+    "subprocess-run-check",
+    // This is because of false positive in create_new_address of sui_crypto.py
+    "--disable",
+    "unpacking-non-sequence",
+    "--disable",
+    "unused-argument"
+  ],
+  "markdownlint.config": {
+    "MD024": {"siblings_only": true},
+    "MD036":false,
+    "MD049":false,
+    "MD007":false
+  },
+  "autoDocstring.docstringFormat": "google",
+  "autoDocstring.generateDocstringOnEnter": true,
+  "autoDocstring.guessTypes": true,
+  "autoDocstring.includeName": true,
+  "[python]": {
+    "editor.defaultFormatter": "ms-python.black-formatter",
+    "editor.formatOnSave": true,
+    "black-formatter.args": [
+      "--check",
+      "--line-length",
+      "79"
+    ],
+  },
+}
