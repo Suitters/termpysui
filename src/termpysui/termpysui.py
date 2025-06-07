@@ -1,7 +1,11 @@
-#
-"""."""
-from textual.app import App
+#    Copyright Frank V. Castellucci
+#    SPDX-License-Identifier: Apache-2.0
 
+# -*- coding: utf-8 -*-
+
+"""Termpysui TUI Application."""
+
+from textual.app import App
 from .screens import DashboardScreen, PyCfgScreen, GraphQLScreen
 
 

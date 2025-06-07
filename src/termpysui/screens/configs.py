@@ -31,6 +31,7 @@ from textual.widgets import (
 
 from ..modals.single_choice import SingleChoiceDialog
 from ..modals.configfm import ConfigPicker, ConfigSaver
+from ..modals.pyconfig_add import AddGroup, AddProfile
 from pysui import PysuiConfiguration
 from pysui.sui.sui_pgql.config.confgroup import ProfileGroup
 
@@ -329,7 +330,7 @@ class ConfigGroup(ConfigRow):
     ]
 
     def compose(self):
-        yield Button("Add", variant="primary", compact=True)
+        yield Button("Add", variant="primary", compact=True, id="add_group")
         yield EditableDataTable(self._CG_EDITS, id="config_group")
 
     def validate_group_name(self, table: EditableDataTable, in_value: str) -> bool:
@@ -353,6 +354,19 @@ class ConfigGroup(ConfigRow):
             ),
         ]
         table.focus()
+
+    @on(Button.Pressed, "#add_group")
+    async def on_add_group(self, event: Button.Pressed) -> None:
+        """
+        Return the user's choice back to the calling application and dismiss the dialog
+        """
+        self.add_group()
+
+    @work()
+    async def add_group(self):
+        new_group = await self.app.push_screen_wait(AddGroup())
+        if new_group is not None:
+            pass
 
     @on(EditableDataTable.CellValueChange)
     def cell_change(self, cell: EditableDataTable.CellValueChange):
@@ -425,8 +439,21 @@ class ConfigProfile(ConfigRow):
     ]
 
     def compose(self):
-        yield Button("Add", variant="primary", compact=True)
+        yield Button("Add", variant="primary", compact=True, id="add_profile")
         yield EditableDataTable(self._CP_EDITS, id="config_profile")
+
+    @on(Button.Pressed, "#add_profile")
+    async def on_add_profile(self, event: Button.Pressed) -> None:
+        """
+        Return the user's choice back to the calling application and dismiss the dialog
+        """
+        self.add_profile()
+
+    @work()
+    async def add_profile(self):
+        new_group = await self.app.push_screen_wait(AddProfile())
+        if new_group is not None:
+            pass
 
     def validate_profile_name(self, table: EditableDataTable, in_value: str) -> bool:
         """Validate no rename collision."""
