@@ -1,0 +1,262 @@
+#    Copyright Frank V. Castellucci
+#    SPDX-License-Identifier: Apache-2.0
+
+# -*- coding: utf-8 -*-
+
+"""Customized widgets for App."""
+import dataclasses
+from typing import Optional, Callable, Iterable, Any
+
+
+from textual import work, events
+from textual.app import ComposeResult
+from textual.coordinate import Coordinate
+from textual.geometry import Offset, Region
+from textual.message import Message
+from textual.screen import Screen, ModalScreen
+import textual.validation as validator
+from textual.widgets import DataTable, Input, Pretty
+
+from textual.widgets.data_table import Row
+
+
+class EditWidgetScreen(ModalScreen):
+    """A modal screen with a single input widget."""
+
+    CSS = """
+        Input.-valid {
+            border: tall $success 60%;
+        }
+        Input.-valid:focus {
+            border: tall $success;
+        }    
+        Pretty {
+            margin: 1 2;
+        }        
+        Input {
+            border: solid $secondary-darken-3;
+            padding: 0;
+
+            &:focus {
+                border: round $secondary;
+            }
+        }
+    """
+
+    def __init__(
+        self,
+        value: Any,
+        region: Region,
+        validators: validator.Validator | Iterable[validator.Validator] | None = None,
+        *args,
+        **kwargs,
+    ) -> None:
+        """Initialization.
+
+        Args:
+            value (Any): the original value.
+            region (Region): the region available for the input widget contents.
+        """
+        super().__init__(*args, **kwargs)
+        self.validators = validators if validators else []
+        self.value = value
+        # store type to later cast the new value to the old type
+        self.value_type = type(value)
+        self.widget_region = region
+
+    def compose(self) -> ComposeResult:
+        yield Input(
+            value=str(self.value), validators=self.validators, validate_on=["submitted"]
+        )
+        yield Pretty([])
+
+    def on_mount(self) -> None:
+        """Calculate and set the input widget's position and size.
+
+        This takes into account any padding you might have set on the input
+        widget, although the default padding is 0.
+        """
+        input = self.query_one(Input)
+        input.offset = Offset(
+            self.widget_region.offset.x - input.styles.padding.left - 1,
+            self.widget_region.offset.y - input.styles.padding.top - 1,
+        )
+        input.styles.width = (
+            self.widget_region.width
+            + input.styles.padding.left
+            + input.styles.padding.right
+            # include the borders _and_ the cursor at the end of the line
+            + 3
+        )
+        input.styles.height = (
+            self.widget_region.height
+            + input.styles.padding.top
+            + input.styles.padding.bottom
+            # include the borders
+            + 2
+        )
+
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Return the new value.
+
+        The new value is cast to the original type. If that is not possible
+        (e.g. you try to replace a number with a string), returns None to
+        indicate that the cell should _not_ be updated.
+        """
+        try:
+            if not event.validation_result.is_valid:
+                self.query_one(Pretty).update(
+                    event.validation_result.failure_descriptions
+                )
+            else:
+                self.dismiss(self.value_type(event.value))
+        except ValueError:
+            self.dismiss(None)
+
+    def _on_key(self, event: events.Key) -> None:
+        """Allow escape for cancelling."""
+        if event.name == "escape":
+            self.dismiss(None)
+
+        return super()._on_key(event)
+
+
+@dataclasses.dataclass
+class CellConfig:
+    field_name: str
+    editable: Optional[bool] = True
+    inline: Optional[bool] = False
+    validators: validator.Validator | Iterable[validator.Validator] = None
+    dialog: Optional[Callable] = False
+
+
+class EditableDataTable(DataTable):
+    """A datatable where you can edit cells."""
+
+    BINDINGS = [("e", "edit", "Edit Cell")]
+
+    class CellValueChange(Message):
+
+        def __init__(
+            self,
+            table: "EditableDataTable",
+            cell_config: CellConfig,
+            coordinates: Coordinate,
+            old_value: str,
+            new_value: str,
+        ):
+            self.table = table
+            self.cell_config: CellConfig = cell_config
+            self.coordinates: Coordinate = coordinates
+            self.old_value: str = old_value
+            self.new_value: str = new_value
+            super().__init__()
+
+    def __init__(self, edit_config: list[CellConfig], **kwargs):
+        super().__init__(**kwargs)
+        self.edit_config = edit_config
+
+    async def action_edit(self) -> None:
+        coords = self.cursor_coordinate
+        edit_cfg = self.edit_config[coords.column]
+        if edit_cfg.editable:
+            if edit_cfg.inline:
+                self.edit_cell(coordinate=coords, cfg=edit_cfg)
+            elif edit_cfg.dialog:
+                self.edit_dialog(coordinate=coords, cfg=edit_cfg)
+
+    @work()
+    async def edit_dialog(self, coordinate: Coordinate, cfg: CellConfig) -> None:
+        old_value = str(self.get_cell_at(coordinate))
+        new_value = await self.app.push_screen_wait(cfg.dialog())
+        if new_value is not None:
+            self.post_message(
+                self.CellValueChange(self, cfg, coordinate, old_value, new_value)
+            )
+
+    @work()
+    async def edit_cell(self, coordinate: Coordinate, cfg: CellConfig) -> None:
+        """Edit cell contents.
+
+        Args:
+            coordinate (Coordinate): the coordinate of the cell to update.
+        """
+        region = self._get_cell_region(coordinate)
+        # the region containing the cell contents, without padding
+        contents_region = Region(
+            region.x + self.cell_padding,
+            region.y,
+            region.width - 2 * self.cell_padding,
+            region.height,
+        )
+        absolute_offset = self.screen.get_offset(self)
+        absolute_region = contents_region.translate(absolute_offset)
+        old_value_cell = self.get_cell_at(coordinate)
+
+        new_value = await self.app.push_screen_wait(
+            EditWidgetScreen(
+                value=old_value_cell,
+                region=absolute_region,
+                validators=cfg.validators,
+            )
+        )
+        if new_value is not None:
+            self.post_message(
+                self.CellValueChange(
+                    self, cfg, coordinate, str(old_value_cell), str(new_value)
+                )
+            )
+
+    def row_with_value(self, row_cell: int, value: str) -> list[Row]:
+        """."""
+
+        def has_value(in_rowc):
+            """."""
+            if str(self.get_row(in_rowc.key)[row_cell]) == value:
+                return True
+            else:
+                return False
+
+        return list(filter(has_value, self.ordered_rows))
+
+    def switch_active(
+        self,
+        from_t: tuple[int, str],
+        to_t: tuple[int, str],
+        set_focus: Optional[bool] = False,
+    ) -> Coordinate:
+        """switch to new active row.
+
+        Args:
+            from_t (tuple[int, str]): tuple of searchable from row
+            to_t (tuple[int, str]): tuble of searchable to row
+            set_focus (Optional[bool], optional): Change focus. Defaults to False.
+
+        Raises:
+            ValueError: _description_
+
+        Returns:
+            Coordinate: The cooredinat of row name value
+        """
+        from_row = self.row_with_value(*from_t)
+        to_row = self.row_with_value(*to_t)
+        active_coordinate = None
+        if from_row:
+            self.update_cell_at(
+                Coordinate(row=int(str(from_row[0].label)) - 1, column=1),
+                "No",
+                update_width=False,
+            )
+        if to_row:
+            active_coordinate = Coordinate(row=int(str(to_row[0].label)) - 1, column=1)
+            self.update_cell_at(
+                active_coordinate,
+                "Yes",
+                update_width=True,
+            )
+        else:
+            raise ValueError(f"No row found at tuple {to_t}")
+        if set_focus:
+            self.focus()
+            self.move_cursor(row=active_coordinate.row, column=0)
+        return active_coordinate.left()

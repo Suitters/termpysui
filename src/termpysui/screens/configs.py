@@ -5,243 +5,44 @@
 
 """Configuration screen for App."""
 
-import dataclasses
 from functools import partial
-from typing import Any, Callable, Iterable, Optional
 from pathlib import Path
 from rich.text import Text
 from textual import work
 from textual.app import ComposeResult
 from textual.coordinate import Coordinate
-from textual.geometry import Offset, Region
 from textual.containers import Vertical, Container, Grid
-from textual import events, on
-from textual.message import Message
+from textual import on
 from textual.reactive import reactive
-from textual.screen import Screen, ModalScreen
+from textual.screen import Screen
 import textual.validation as validator
 from textual.widgets import (
     DataTable,
     Footer,
     Header,
     Button,
-    Input,
-    Pretty,
 )
+
+from textual.widgets.data_table import RowKey
 
 from ..modals.single_choice import SingleChoiceDialog
 from ..modals.configfm import ConfigPicker, ConfigSaver
-from ..modals.pyconfig_add import AddGroup, AddProfile
+from ..modals.pyconfig_add import AddGroup, AddProfile, NewGroup, NewProfile
+from ..widgets.editable_table import EditableDataTable, CellConfig
 from pysui import PysuiConfiguration
 from pysui.sui.sui_pgql.config.confgroup import ProfileGroup
-
-
-class EditWidgetScreen(ModalScreen):
-    """A modal screen with a single input widget."""
-
-    CSS = """
-        Input.-valid {
-            border: tall $success 60%;
-        }
-        Input.-valid:focus {
-            border: tall $success;
-        }    
-        Pretty {
-            margin: 1 2;
-        }        
-        Input {
-            border: solid $secondary-darken-3;
-            padding: 0;
-
-            &:focus {
-                border: round $secondary;
-            }
-        }
-    """
-
-    def __init__(
-        self,
-        value: Any,
-        region: Region,
-        validators: validator.Validator | Iterable[validator.Validator] | None = None,
-        *args,
-        **kwargs,
-    ) -> None:
-        """Initialization.
-
-        Args:
-            value (Any): the original value.
-            region (Region): the region available for the input widget contents.
-        """
-        super().__init__(*args, **kwargs)
-        self.validators = validators if validators else []
-        self.value = value
-        # store type to later cast the new value to the old type
-        self.value_type = type(value)
-        self.widget_region = region
-
-    def compose(self) -> ComposeResult:
-        yield Input(
-            value=str(self.value), validators=self.validators, validate_on=["submitted"]
-        )
-        yield Pretty([])
-
-    def on_mount(self) -> None:
-        """Calculate and set the input widget's position and size.
-
-        This takes into account any padding you might have set on the input
-        widget, although the default padding is 0.
-        """
-        input = self.query_one(Input)
-        input.offset = Offset(
-            self.widget_region.offset.x - input.styles.padding.left - 1,
-            self.widget_region.offset.y - input.styles.padding.top - 1,
-        )
-        input.styles.width = (
-            self.widget_region.width
-            + input.styles.padding.left
-            + input.styles.padding.right
-            # include the borders _and_ the cursor at the end of the line
-            + 3
-        )
-        input.styles.height = (
-            self.widget_region.height
-            + input.styles.padding.top
-            + input.styles.padding.bottom
-            # include the borders
-            + 2
-        )
-
-    def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Return the new value.
-
-        The new value is cast to the original type. If that is not possible
-        (e.g. you try to replace a number with a string), returns None to
-        indicate that the cell should _not_ be updated.
-        """
-        try:
-            if not event.validation_result.is_valid:
-                self.query_one(Pretty).update(
-                    event.validation_result.failure_descriptions
-                )
-            else:
-                self.dismiss(self.value_type(event.value))
-        except ValueError:
-            self.dismiss(None)
-
-    def _on_key(self, event: events.Key) -> None:
-        """Allow escape for cancelling."""
-        if event.name == "escape":
-            self.dismiss(None)
-
-        return super()._on_key(event)
-
-
-@dataclasses.dataclass
-class CellConfig:
-    field_name: str
-    editable: Optional[bool] = True
-    inline: Optional[bool] = False
-    validators: validator.Validator | Iterable[validator.Validator] = None
-    dialog: Optional[Callable] = False
-
-
-class EditableDataTable(DataTable):
-    """A datatable where you can edit cells."""
-
-    BINDINGS = [("e", "edit", "Edit Cell")]
-
-    class CellValueChange(Message):
-
-        def __init__(
-            self,
-            table: "EditableDataTable",
-            cell_config: CellConfig,
-            coordinates: Coordinate,
-            old_value: str,
-            new_value: str,
-        ):
-            self.table = table
-            self.cell_config: CellConfig = cell_config
-            self.coordinates: Coordinate = coordinates
-            self.old_value: str = old_value
-            self.new_value: str = new_value
-            super().__init__()
-
-    def __init__(self, edit_config: list[CellConfig], **kwargs):
-        super().__init__(**kwargs)
-        self.edit_config = edit_config
-
-    async def action_edit(self) -> None:
-        coords = self.cursor_coordinate
-        edit_cfg = self.edit_config[coords.column]
-        if edit_cfg.editable:
-            if edit_cfg.inline:
-                self.edit_cell(coordinate=coords, cfg=edit_cfg)
-            elif edit_cfg.dialog:
-                self.edit_dialog(coordinate=coords, cfg=edit_cfg)
-
-    @work()
-    async def edit_dialog(self, coordinate: Coordinate, cfg: CellConfig) -> None:
-        old_value = str(self.get_cell_at(coordinate))
-        new_value = await self.app.push_screen_wait(cfg.dialog())
-        if new_value is not None:
-            self.post_message(
-                self.CellValueChange(self, cfg, coordinate, old_value, new_value)
-            )
-
-    @work()
-    async def edit_cell(self, coordinate: Coordinate, cfg: CellConfig) -> None:
-        """Edit cell contents.
-
-        Args:
-            coordinate (Coordinate): the coordinate of the cell to update.
-        """
-        region = self._get_cell_region(coordinate)
-        # the region containing the cell contents, without padding
-        contents_region = Region(
-            region.x + self.cell_padding,
-            region.y,
-            region.width - 2 * self.cell_padding,
-            region.height,
-        )
-        absolute_offset = self.screen.get_offset(self)
-        absolute_region = contents_region.translate(absolute_offset)
-        old_value_cell = self.get_cell_at(coordinate)
-
-        new_value = await self.app.push_screen_wait(
-            EditWidgetScreen(
-                value=old_value_cell,
-                region=absolute_region,
-                validators=cfg.validators,
-            )
-        )
-        if new_value is not None:
-            self.post_message(
-                self.CellValueChange(
-                    self, cfg, coordinate, str(old_value_cell), str(new_value)
-                )
-            )
-
-    def row_with_value(self, row_cell: int, value: str) -> Any:
-        """."""
-
-        def has_value(in_rowc):
-            """."""
-            if str(self.get_row(in_rowc.key)[row_cell]) == value:
-                return True
-            else:
-                return False
-
-        return list(filter(has_value, self.ordered_rows))
 
 
 class ConfigRow(Container):
     """Base configuration container class."""
 
     _CONFIG_ROWS: list["ConfigRow"] = []
-    configuration: reactive[PysuiConfiguration | None] = reactive(None)
-    configuration_group: reactive[ProfileGroup | None] = reactive(None)
+    configuration: reactive[PysuiConfiguration | None] = reactive(
+        None, always_update=True
+    )
+    configuration_group: reactive[ProfileGroup | None] = reactive(
+        None, always_update=True
+    )
 
     def __init__(
         self, *children, name=None, id=None, classes=None, disabled=False, markup=True
@@ -272,6 +73,7 @@ class ConfigRow(Container):
         cpath = config_path.parent
         pysuicfg = PysuiConfiguration(from_cfg_path=cpath)
         for row in cls._CONFIG_ROWS:
+            row.query_one("Button").disabled = False
             row.configuration = pysuicfg
 
     @classmethod
@@ -282,34 +84,18 @@ class ConfigRow(Container):
 
     def _switch_active(self, cell: EditableDataTable.CellValueChange) -> Coordinate:
         """Change the active row."""
-        prev_y_row = cell.table.row_with_value(1, "Yes")[0]
-        curr_n_rows = cell.table.row_with_value(1, "No")
         new_active_coord: Coordinate = None
         # The current was 'Active', find an alternative or ignore if solo
         if cell.old_value == "Yes":
-            if len(curr_n_rows) > 1:
-                # Set the current to No
-                cell.table.update_cell_at(
-                    cell.coordinates, cell.new_value, update_width=True
-                )
-                # Set new to Yes
-                n_row = int(str(curr_n_rows[0].label)) - 1
-                coord = Coordinate(row=n_row, column=1)
-                cell.table.update_cell_at(coord, cell.old_value, update_width=True)
-                # Get associated group names
-                new_active_coord = coord
-                # new_y_name = str(cell.table.get_cell_at(coord.left()))
-        elif cell.new_value == "Yes":
-            # Update existing Yes to No
-            coord = Coordinate(row=int(str(prev_y_row.label)) - 1, column=1)
-            cell.table.update_cell_at(coord, cell.old_value, update_width=True)
-            # Set new Yes
-            cell.table.update_cell_at(
-                cell.coordinates, cell.new_value, update_width=True
+            new_active_coord = cell.table.switch_active(
+                (1, "Yes"), (1, "No"), set_focus=True
             )
-            # Get and set active group
-            new_active_coord = cell.coordinates
-        cell.table.move_cursor(row=new_active_coord.row, column=0)
+        elif cell.new_value == "Yes":
+            # Update existing Yes to No and set current to Yes
+            name = str(cell.table.get_cell_at(cell.coordinates.left()))
+            new_active_coord = cell.table.switch_active(
+                (1, "Yes"), (0, name), set_focus=True
+            )
         return new_active_coord
 
 
@@ -330,7 +116,9 @@ class ConfigGroup(ConfigRow):
     ]
 
     def compose(self):
-        yield Button("Add", variant="primary", compact=True, id="add_group")
+        yield Button(
+            "Add", variant="primary", compact=True, id="add_group", disabled=True
+        )
         yield EditableDataTable(self._CG_EDITS, id="config_group")
 
     def validate_group_name(self, table: EditableDataTable, in_value: str) -> bool:
@@ -364,9 +152,27 @@ class ConfigGroup(ConfigRow):
 
     @work()
     async def add_group(self):
-        new_group = await self.app.push_screen_wait(AddGroup())
-        if new_group is not None:
-            pass
+        new_group: NewGroup = await self.app.push_screen_wait(AddGroup())
+        if (
+            new_group is not None
+            and new_group.name not in self.configuration.group_names()
+        ):
+            table: EditableDataTable = self.query_one("#config_group")
+            prf_grp = ProfileGroup(new_group.name, "", "", [], [], [], [])
+            self.configuration.model.add_group(
+                group=prf_grp, make_active=new_group.active
+            )
+            number = table.row_count + 1
+            label = Text(str(number), style="#B0FC38 italic")
+            table.add_row(
+                *[Text(new_group.name), Text("No")],
+                label=label,
+            )
+            if new_group.active:
+                self.configuration.model.group_active = new_group.name
+                table.switch_active((1, "Yes"), (0, new_group.name))
+            self.configuration.save()
+            self.config_group_change(self.configuration.active_group)
 
     @on(EditableDataTable.CellValueChange)
     def cell_change(self, cell: EditableDataTable.CellValueChange):
@@ -384,12 +190,11 @@ class ConfigGroup(ConfigRow):
             # Active status changed
             elif cell.cell_config.field_name == "Active":
                 new_coord = self._switch_active(cell)
-                self.configuration.model.group_active = str(
-                    cell.table.get_cell_at(new_coord.left())
-                )
-                self.config_group_change(self.configuration.active_group)
-
+                gname = str(cell.table.get_cell_at(new_coord))
+                self.configuration.model.group_active = gname
+                group = self.configuration.model.get_group(group_name=gname)
             self.configuration.save()
+            self.config_group_change(group)
 
     def watch_configuration(self, cfg: PysuiConfiguration):
         """Called when a new configuration is selected."""
@@ -439,7 +244,9 @@ class ConfigProfile(ConfigRow):
     ]
 
     def compose(self):
-        yield Button("Add", variant="primary", compact=True, id="add_profile")
+        yield Button(
+            "Add", variant="primary", compact=True, id="add_profile", disabled=True
+        )
         yield EditableDataTable(self._CP_EDITS, id="config_profile")
 
     @on(Button.Pressed, "#add_profile")
@@ -451,8 +258,8 @@ class ConfigProfile(ConfigRow):
 
     @work()
     async def add_profile(self):
-        new_group = await self.app.push_screen_wait(AddProfile())
-        if new_group is not None:
+        new_profile: NewProfile = await self.app.push_screen_wait(AddProfile())
+        if new_profile is not None:
             pass
 
     def validate_profile_name(self, table: EditableDataTable, in_value: str) -> bool:
@@ -493,7 +300,7 @@ class ConfigProfile(ConfigRow):
             elif cell.cell_config.field_name == "Active":
                 active_coord = self._switch_active(cell)
                 self.configuration_group.using_profile = str(
-                    cell.table.get_cell_at(active_coord.left())
+                    cell.table.get_cell_at(active_coord)
                 )
             elif cell.cell_config.field_name == "URL":
                 profile_name = cell.table.get_cell_at(cell.coordinates.left().left())
@@ -510,7 +317,10 @@ class ConfigProfile(ConfigRow):
         table: EditableDataTable = self.query_one("#config_profile")
         # Empty table
         table.clear()
+        self.border_title = self.name
         if cfg:
+            # Label it
+            self.border_title = self.name + f" in {cfg.group_name}"
             # Setup row label
             counter = 1
             # Build content
@@ -548,7 +358,7 @@ class ConfigIdentities(ConfigRow):
     ]
 
     def compose(self):
-        yield Button("Add", variant="primary", compact=True)
+        yield Button("Add", variant="primary", compact=True, disabled=True)
         yield EditableDataTable(self._CI_EDITS, id="config_identities")
 
     def validate_alias_name(self, table: EditableDataTable, in_value: str) -> bool:
@@ -584,17 +394,18 @@ class ConfigIdentities(ConfigRow):
                     cell.coordinates, cell.new_value, update_width=True
                 )
             elif cell.cell_config.field_name == "Active":
-                new_coord = self._switch_active(cell)
-                self.configuration_group.using_address = str(
-                    cell.table.get_cell_at(new_coord.right().right())
-                )
+                new_coord = self._switch_active(cell).right().right().right()
+                addy = str(cell.table.get_cell_at(new_coord))
+                self.configuration_group.using_address = addy
             self.configuration.save()
 
     def watch_configuration_group(self, cfg: ProfileGroup):
         table: EditableDataTable = self.query_one("#config_identities")
         # Empty table
         table.clear()
+        self.border_title = self.name
         if cfg:
+            self.border_title = self.name + f" in {cfg.group_name}"
             # Setup row label
             counter = 1
             # Build content
