@@ -27,10 +27,17 @@ from textual.widgets.data_table import RowKey
 
 from ..modals.single_choice import SingleChoiceDialog
 from ..modals.configfm import ConfigPicker, ConfigSaver
-from ..modals.pyconfig_add import AddGroup, AddProfile, NewGroup, NewProfile
+from ..modals.pyconfig_add import (
+    AddGroup,
+    AddIdentity,
+    AddProfile,
+    NewGroup,
+    NewIdentity,
+    NewProfile,
+)
 from ..widgets.editable_table import EditableDataTable, CellConfig
 from pysui import PysuiConfiguration
-from pysui.sui.sui_pgql.config.confgroup import ProfileGroup
+from pysui.sui.sui_pgql.config.confgroup import ProfileGroup, Profile, ProfileAlias
 
 
 class ConfigRow(Container):
@@ -170,7 +177,7 @@ class ConfigGroup(ConfigRow):
             )
             if new_group.active:
                 self.configuration.model.group_active = new_group.name
-                table.switch_active((1, "Yes"), (0, new_group.name))
+                table.switch_active((1, "Yes"), (0, new_group.name), set_focus=True)
             self.configuration.save()
             self.config_group_change(self.configuration.active_group)
 
@@ -259,8 +266,25 @@ class ConfigProfile(ConfigRow):
     @work()
     async def add_profile(self):
         new_profile: NewProfile = await self.app.push_screen_wait(AddProfile())
-        if new_profile is not None:
-            pass
+        if (
+            new_profile is not None
+            and new_profile.name not in self.configuration_group.profile_names
+        ):
+            table: EditableDataTable = self.query_one("#config_profile")
+            prf = Profile(new_profile.name, new_profile.url)
+            self.configuration_group.add_profile(
+                new_prf=prf, make_active=new_profile.active
+            )
+            number = table.row_count + 1
+            label = Text(str(number), style="#B0FC38 italic")
+            table.add_row(
+                *[Text(new_profile.name), Text("No"), Text(new_profile.url)],
+                label=label,
+            )
+            if new_profile.active:
+                table.switch_active((1, "Yes"), (0, new_profile.name), set_focus=True)
+            self.configuration.save()
+            # self.config_group_change(self.configuration.active_group)
 
     def validate_profile_name(self, table: EditableDataTable, in_value: str) -> bool:
         """Validate no rename collision."""
@@ -358,8 +382,45 @@ class ConfigIdentities(ConfigRow):
     ]
 
     def compose(self):
-        yield Button("Add", variant="primary", compact=True, disabled=True)
+        yield Button(
+            "Add", variant="primary", compact=True, disabled=True, id="add_identity"
+        )
         yield EditableDataTable(self._CI_EDITS, id="config_identities")
+
+    @on(Button.Pressed, "#add_identity")
+    async def on_add_profile(self, event: Button.Pressed) -> None:
+        """
+        Return the user's choice back to the calling application and dismiss the dialog
+        """
+        self.add_identity()
+
+    @work()
+    async def add_identity(self):
+        new_ident: NewIdentity = await self.app.push_screen_wait(AddIdentity())
+        alias_list = [x.alias for x in self.configuration_group.alias_list]
+        if new_ident is not None and new_ident.alias not in alias_list:
+            table: EditableDataTable = self.query_one("#config_identities")
+            mnem, addy, prfkey, prfalias = self.configuration_group.new_keypair_parts(
+                of_keytype=new_ident.key_scheme,
+                word_counts=new_ident.word_count,
+                derivation_path=new_ident.derivation_path,
+                alias=new_ident.alias,
+                alias_list=alias_list,
+            )
+            print()
+            # prf = Profile(new_profile.name, new_profile.url)
+            # self.configuration_group.add_profile(
+            #     new_prf=prf, make_active=new_profile.active
+            # )
+            # number = table.row_count + 1
+            # label = Text(str(number), style="#B0FC38 italic")
+            # table.add_row(
+            #     *[Text(new_profile.name), Text("No"), Text(new_profile.url)],
+            #     label=label,
+            # )
+            # if new_profile.active:
+            #     table.switch_active((1, "Yes"), (0, new_profile.name), set_focus=True)
+            # self.configuration.save()
 
     def validate_alias_name(self, table: EditableDataTable, in_value: str) -> bool:
         """Validate no rename collision."""

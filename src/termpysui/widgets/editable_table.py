@@ -180,6 +180,7 @@ class EditableDataTable(DataTable):
 
         Args:
             coordinate (Coordinate): the coordinate of the cell to update.
+            cfg (CellConfig): the configuration of the cell
         """
         region = self._get_cell_region(coordinate)
         # the region containing the cell contents, without padding
@@ -208,7 +209,15 @@ class EditableDataTable(DataTable):
             )
 
     def row_with_value(self, row_cell: int, value: str) -> list[Row]:
-        """."""
+        """row_with_value Retrieves a row that meets the row cell (column) and value criteria.
+
+        Args:
+            row_cell (int): The column index in the row to retrieve current value
+            value (str): The value that should match the contents of said column index
+
+        Returns:
+            list[Row]: List of Rows that satisfy the criteria.
+        """
 
         def has_value(in_rowc):
             """."""
