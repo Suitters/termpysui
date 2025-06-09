@@ -37,10 +37,5 @@
   "[python]": {
     "editor.defaultFormatter": "ms-python.black-formatter",
     "editor.formatOnSave": true,
-    "black-formatter.args": [
-      "--check",
-      "--line-length",
-      "79"
-    ],
   },
 }

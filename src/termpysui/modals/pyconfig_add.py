@@ -11,6 +11,7 @@ from textual import events, on
 from textual.containers import (
     Horizontal,
     Vertical,
+    VerticalScroll,
     Center,
 )
 from textual.screen import ModalScreen
@@ -49,7 +50,7 @@ class AddGroup(ModalScreen[NewGroup | None]):
     DEFAULT_CSS = """
     AddGroup {
         width: 50%;
-        align: center top;    
+        align: center middle;    
         background: $primary 10%;   
         border: white; 
     }
@@ -57,11 +58,11 @@ class AddGroup(ModalScreen[NewGroup | None]):
         width: 50%;
         height: 40%;
         border: white 80%;
-        content-align: center top;
+        content-align: center middle;
         margin: 1;
     }
     .center {
-        content-align: center top;
+        content-align: center middle;
     }
     .group_input {
         margin:1;
@@ -75,7 +76,7 @@ class AddGroup(ModalScreen[NewGroup | None]):
     TITLE = "Add a new Group"
 
     def compose(self):
-        yield Vertical(
+        yield VerticalScroll(
             Header(id="add_group_header"),
             Input(
                 placeholder="Enter group name (3-32 chars)",
@@ -123,7 +124,7 @@ class AddProfile(ModalScreen[NewProfile | None]):
     DEFAULT_CSS = """
     AddProfile {
         width: 50%;
-        align: center top;    
+        align: center middle;    
         background: $primary 10%;   
         border: white; 
     }
@@ -131,11 +132,11 @@ class AddProfile(ModalScreen[NewProfile | None]):
         width: 50%;
         height: 50%;
         border: white 80%;
-        content-align: center top;
+        content-align: center middle;
         margin: 1;
     }
     .center {
-        content-align: center top;
+        content-align: center middle;
     }
     .profile_input {
         margin:1;
@@ -149,7 +150,7 @@ class AddProfile(ModalScreen[NewProfile | None]):
     TITLE = "Add a new Profile"
 
     def compose(self):
-        yield Vertical(
+        yield VerticalScroll(
             Header(id="add_profile_header"),
             Input(
                 placeholder="Enter profile name (3-32 chars)",
@@ -211,7 +212,7 @@ class AddIdentity(ModalScreen[NewIdentity | None]):
     DEFAULT_CSS = """
     AddIdentity {
         width: 50%;
-        align: center top;    
+        align: center middle;    
         background: $primary 10%;   
         border: white; 
     }
@@ -219,14 +220,14 @@ class AddIdentity(ModalScreen[NewIdentity | None]):
         width: 50%;
         height: 65%;
         border: white 80%;
-        content-align: center top;
+        content-align: center middle;
         # margin: 1;
     }
     RadioSet Checkbox {
         margin: 1;
     }
     .center {
-        content-align: center top;
+        content-align: center middle;
     }
     .id_input {
         margin:1;
@@ -239,7 +240,7 @@ class AddIdentity(ModalScreen[NewIdentity | None]):
 
     def compose(self):
         self.ktindex = -1
-        yield Vertical(
+        yield VerticalScroll(
             Header(id="add_identity_header"),
             Input(
                 placeholder="Enter identity alias (3-32 chars)",
