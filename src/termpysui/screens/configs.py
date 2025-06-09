@@ -26,6 +26,7 @@ from textual.widgets import (
 from textual.widgets.data_table import RowKey
 
 from ..modals.single_choice import SingleChoiceDialog
+from ..modals.confirm import NewKey
 from ..modals.configfm import ConfigPicker, ConfigSaver
 from ..modals.pyconfig_add import (
     AddGroup,
@@ -398,8 +399,9 @@ class ConfigIdentities(ConfigRow):
     async def add_identity(self):
         new_ident: NewIdentity = await self.app.push_screen_wait(AddIdentity())
         alias_list = [x.alias for x in self.configuration_group.alias_list]
-        if new_ident is not None and new_ident.alias not in alias_list:
-            table: EditableDataTable = self.query_one("#config_identities")
+        if new_ident and new_ident.alias not in alias_list:
+
+            # Generate the new key based on user input
             mnem, addy, prfkey, prfalias = self.configuration_group.new_keypair_parts(
                 of_keytype=new_ident.key_scheme,
                 word_counts=new_ident.word_count,
@@ -407,20 +409,31 @@ class ConfigIdentities(ConfigRow):
                 alias=new_ident.alias,
                 alias_list=alias_list,
             )
-            print()
-            # prf = Profile(new_profile.name, new_profile.url)
-            # self.configuration_group.add_profile(
-            #     new_prf=prf, make_active=new_profile.active
-            # )
-            # number = table.row_count + 1
-            # label = Text(str(number), style="#B0FC38 italic")
-            # table.add_row(
-            #     *[Text(new_profile.name), Text("No"), Text(new_profile.url)],
-            #     label=label,
-            # )
-            # if new_profile.active:
-            #     table.switch_active((1, "Yes"), (0, new_profile.name), set_focus=True)
-            # self.configuration.save()
+            # Update the table
+            table: EditableDataTable = self.query_one("#config_identities")
+            number = table.row_count + 1
+            label = Text(str(number), style="#B0FC38 italic")
+            table.add_row(
+                *[
+                    Text(new_ident.alias),
+                    Text("No"),
+                    Text(prfalias.public_key_base64),
+                    Text(addy),
+                ],
+                label=label,
+            )
+            # Settle active
+            if new_ident.active:
+                table.switch_active((1, "Yes"), (0, new_ident.alias), set_focus=True)
+            # Add to group
+            self.configuration_group.add_keypair_and_parts(
+                new_address=addy,
+                new_alias=prfalias,
+                new_key=prfkey,
+                make_active=new_ident.active,
+            )
+            _ = await self.app.push_screen_wait(NewKey(mnem, prfkey.private_key_base64))
+            self.configuration.save()
 
     def validate_alias_name(self, table: EditableDataTable, in_value: str) -> bool:
         """Validate no rename collision."""
