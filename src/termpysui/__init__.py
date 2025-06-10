@@ -1,4 +1,4 @@
 #
 """TermPysui central."""
 
-from .screens import DashboardScreen, PyCfgScreen, GraphQLScreen
+from .screens import PyCfgScreen, GraphQLScreen

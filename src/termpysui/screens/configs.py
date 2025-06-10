@@ -25,13 +25,16 @@ from textual.widgets import (
 
 from textual.widgets.data_table import RowKey
 
-from ..modals.single_choice import SingleChoiceDialog
-from ..modals.confirm import NewKey
-from ..modals.configfm import ConfigPicker, ConfigSaver
-from ..modals.pyconfig_add import (
+from ..modals import (
+    SingleChoiceDialog,
+    NewKey,
     AddGroup,
-    AddIdentity,
     AddProfile,
+    AddIdentity,
+    ConfigPicker,
+    ConfigSaver,
+)
+from ..modals.pyconfig_add import (
     NewGroup,
     NewIdentity,
     NewProfile,
@@ -160,11 +163,10 @@ class ConfigGroup(ConfigRow):
 
     @work()
     async def add_group(self):
-        new_group: NewGroup = await self.app.push_screen_wait(AddGroup())
-        if (
-            new_group is not None
-            and new_group.name not in self.configuration.group_names()
-        ):
+        new_group: NewGroup = await self.app.push_screen_wait(
+            AddGroup(self.configuration.group_names())
+        )
+        if new_group:
             table: EditableDataTable = self.query_one("#config_group")
             prf_grp = ProfileGroup(new_group.name, "", "", [], [], [], [])
             self.configuration.model.add_group(

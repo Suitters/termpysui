@@ -10,13 +10,12 @@ import dataclasses
 from textual import events, on
 from textual.containers import (
     Horizontal,
-    Vertical,
     VerticalScroll,
     Center,
 )
 from textual.screen import ModalScreen
 import textual.validation as validator
-from textual.widgets import Input, Button, Checkbox, Header, RadioSet
+from textual.widgets import Input, Button, Checkbox, Header, RadioSet, Static, Pretty
 
 from pysui.abstracts.client_keypair import SignatureScheme
 
@@ -56,7 +55,7 @@ class AddGroup(ModalScreen[NewGroup | None]):
     }
     #add-group-dlg {
         width: 50%;
-        height: 40%;
+        height: 50%;
         border: white 80%;
         content-align: center middle;
         margin: 1;
@@ -67,6 +66,9 @@ class AddGroup(ModalScreen[NewGroup | None]):
     .group_input {
         margin:1;
     }
+    Pretty{
+        margin: 1;
+    }
     Button {
         width: 20%;
         margin: 1;
@@ -75,13 +77,32 @@ class AddGroup(ModalScreen[NewGroup | None]):
 
     TITLE = "Add a new Group"
 
+    def __init__(self, group_names: list[str], name=None, id=None, classes=None):
+        super().__init__(name, id, classes)
+        self.names = group_names or []
+        self.is_valid = False
+
+    def _validate_name(self, in_value: str) -> bool:
+        """."""
+        self.is_valid = True
+        self.query_one(Pretty).display = False
+        if in_value in self.names:
+            self.is_valid = False
+
+        return self.is_valid
+
     def compose(self):
         yield VerticalScroll(
             Header(id="add_group_header"),
+            Pretty([], classes="center"),
             Input(
                 placeholder="Enter group name (3-32 chars)",
                 classes="group_input",
-                validators=[validator.Regex("^[a-zA-Z_-]{3,32}$")],
+                max_length=32,
+                validators=[
+                    validator.Regex("^[a-zA-Z_-]{3,32}$"),
+                    validator.Function(self._validate_name, "Group name exists."),
+                ],
                 id="group_name",
             ),
             Checkbox("Make Active?"),
@@ -94,10 +115,25 @@ class AddGroup(ModalScreen[NewGroup | None]):
             id="add-group-dlg",
         )
 
+    def on_mount(self):
+        """."""
+        self.query_one(Pretty).display = False
+
     def _on_key(self, event: events.Key) -> None:
         if event.name == "escape":
             self.dismiss(None)
         return super()._on_key(event)
+
+    @on(Input.Changed)
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Check if validation error on name.
+
+        If not, update the status.
+        """
+        if not event.validation_result.is_valid:
+            pretty = self.query_one(Pretty)
+            pretty.display = True
+            pretty.update(event.validation_result.failure_descriptions)
 
     @on(Button.Pressed, "#choice-ok")
     def on_ok(self, event: Button.Pressed) -> None:
@@ -105,7 +141,7 @@ class AddGroup(ModalScreen[NewGroup | None]):
         Return the user's choice back to the calling application and dismiss the dialog
         """
         iput = self.query_one("Input")
-        if not iput.value:
+        if not iput.value or self.is_valid == False:
             iput.focus()
         else:
             self.dismiss(NewGroup(iput.value, self.query_one("Checkbox").value))
@@ -155,6 +191,7 @@ class AddProfile(ModalScreen[NewProfile | None]):
             Input(
                 placeholder="Enter profile name (3-32 chars)",
                 classes="profile_input",
+                max_length=32,
                 validators=[validator.Regex("^[a-zA-Z_-]{3,32}$")],
                 id="profile_name",
             ),
@@ -221,7 +258,6 @@ class AddIdentity(ModalScreen[NewIdentity | None]):
         height: 65%;
         border: white 80%;
         content-align: center middle;
-        # margin: 1;
     }
     RadioSet Checkbox {
         margin: 1;
@@ -246,6 +282,7 @@ class AddIdentity(ModalScreen[NewIdentity | None]):
                 placeholder="Enter identity alias (3-32 chars)",
                 classes="id_input",
                 validators=[validator.Regex("^[a-zA-Z_-]{3,32}$")],
+                max_length=32,
                 id="id_alias",
             ),
             RadioSet("ED25519", "SECP256K1", "SECP256R1", id="id_keytype"),
@@ -261,7 +298,6 @@ class AddIdentity(ModalScreen[NewIdentity | None]):
             Input(
                 placeholder="Optional derivation path",
                 classes="id_input",
-                # validators=[validator.URL()],
                 id="id_derv",
             ),
             Checkbox("Make Active?"),
