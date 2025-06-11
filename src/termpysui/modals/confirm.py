@@ -67,10 +67,10 @@ class NewKey(ModalScreen[bool]):
             id="confirm-key-dlg",
         )
 
-    def _on_key(self, event: events.Key) -> None:
+    async def _on_key(self, event: events.Key) -> None:
         if event.name == "escape":
             self.dismiss(None)
-        return super()._on_key(event)
+        await super()._on_key(event)
 
     @on(Button.Pressed, "#choice-ok")
     def on_ok(self, event: Button.Pressed) -> None:

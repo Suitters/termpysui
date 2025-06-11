@@ -8,6 +8,7 @@ textual-dev = "*"
 pip = "*"
 textual = "*"
 pysui = {file = "../pysui"}
+doc8 = "*"
 
 [dev-packages]
 

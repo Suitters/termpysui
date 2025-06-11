@@ -5,10 +5,17 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Debug App",
+            "name": "termpysui",
             "type": "debugpy",
             "request": "launch",
             "module": "src.termpysui.termpysui",
+            "justMyCode": true
+        },
+        {
+            "name": "mre",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "modal_base",
             "justMyCode": true
         }
     ]

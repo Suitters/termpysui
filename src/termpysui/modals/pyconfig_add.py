@@ -7,15 +7,17 @@
 
 import dataclasses
 
+from textual.app import ComposeResult
 from textual import events, on
 from textual.containers import (
     Horizontal,
     VerticalScroll,
     Center,
 )
-from textual.screen import ModalScreen
+from textual.screen import ModalScreen, ScreenResultType
 import textual.validation as validator
-from textual.widgets import Input, Button, Checkbox, Header, RadioSet, Static, Pretty
+from textual.widget import Widget
+from textual.widgets import Input, Button, Checkbox, Header, RadioSet, Pretty
 
 from pysui.abstracts.client_keypair import SignatureScheme
 
@@ -43,31 +45,28 @@ class NewIdentity:
     active: bool
 
 
-class AddGroup(ModalScreen[NewGroup | None]):
-    """Add group dialog that accepts a name and active flag."""
+class AddBase(ModalScreen[ScreenResultType]):
 
     DEFAULT_CSS = """
-    AddGroup {
-        width: 50%;
+    Screen {
         align: center middle;    
         background: $primary 10%;   
-        border: white; 
     }
-    #add-group-dlg {
+    #add-dlg {
         width: 50%;
         height: 50%;
         border: white 80%;
         content-align: center middle;
         margin: 1;
+        Pretty {
+            margin: 1;
+        }
     }
     .center {
         content-align: center middle;
     }
-    .group_input {
+    .name_input {
         margin:1;
-    }
-    Pretty{
-        margin: 1;
     }
     Button {
         width: 20%;
@@ -75,76 +74,55 @@ class AddGroup(ModalScreen[NewGroup | None]):
     }
     """
 
-    TITLE = "Add a new Group"
-
     def __init__(self, group_names: list[str], name=None, id=None, classes=None):
         super().__init__(name, id, classes)
         self.names = group_names or []
-        self.is_valid = False
+        self.is_name_valid = False
 
     def _validate_name(self, in_value: str) -> bool:
         """."""
-        self.is_valid = True
+        self.is_name_valid = True
         self.query_one(Pretty).display = False
         if in_value in self.names:
-            self.is_valid = False
+            self.is_name_valid = False
+        return self.is_name_valid
 
-        return self.is_valid
-
-    def compose(self):
+    def compose(self) -> ComposeResult:
         yield VerticalScroll(
-            Header(id="add_group_header"),
+            Header(),
             Pretty([], classes="center"),
             Input(
-                placeholder="Enter group name (3-32 chars)",
-                classes="group_input",
+                placeholder="Enter name (3-32 chars)",
+                classes="name_input",
                 max_length=32,
                 validators=[
                     validator.Regex("^[a-zA-Z_-]{3,32}$"),
-                    validator.Function(self._validate_name, "Group name exists."),
+                    validator.Function(self._validate_name, "Name already exists."),
                 ],
-                id="group_name",
+                id="add_name",
             ),
-            Checkbox("Make Active?"),
+            Checkbox("Make Active?", compact=True, button_first=False),
             Center(
                 Horizontal(
                     Button("OK", variant="primary", id="choice-ok"),
                     Button("Cancel", variant="error", id="choice-cancel"),
                 )
             ),
-            id="add-group-dlg",
+            id="add-dlg",
         )
 
-    def on_mount(self):
-        """."""
+    def _on_mount(self, event: events.Mount) -> None:
         self.query_one(Pretty).display = False
+        center = self.query_one(Center)
+        self._post_mount(event, center)
 
-    def _on_key(self, event: events.Key) -> None:
+    def _post_mount(self, event: events.Mount, container: Widget) -> None:
+        """Default post_mount does nothing"""
+        pass
+
+    async def _on_key(self, event: events.Key) -> None:
         if event.name == "escape":
             self.dismiss(None)
-        return super()._on_key(event)
-
-    @on(Input.Changed)
-    def on_input_changed(self, event: Input.Changed) -> None:
-        """Check if validation error on name.
-
-        If not, update the status.
-        """
-        if not event.validation_result.is_valid:
-            pretty = self.query_one(Pretty)
-            pretty.display = True
-            pretty.update(event.validation_result.failure_descriptions)
-
-    @on(Button.Pressed, "#choice-ok")
-    def on_ok(self, event: Button.Pressed) -> None:
-        """
-        Return the user's choice back to the calling application and dismiss the dialog
-        """
-        iput = self.query_one("Input")
-        if not iput.value or self.is_valid == False:
-            iput.focus()
-        else:
-            self.dismiss(NewGroup(iput.value, self.query_one("Checkbox").value))
 
     @on(Button.Pressed, "#choice-cancel")
     def on_cancel(self, event: Button.Pressed) -> None:
@@ -152,6 +130,41 @@ class AddGroup(ModalScreen[NewGroup | None]):
         Returns None to the calling application and dismisses the dialog
         """
         self.dismiss(None)
+
+
+class AddGroup(AddBase[NewGroup | None]):
+    """Add group dialog that accepts a name and active flag."""
+
+    TITLE = "Add a new Group"
+
+    def _post_mount(self, event: events.Mount, center: Widget) -> None:
+        """Called post mount for adding new widgets."""
+        return
+
+    @on(Input.Changed)
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Check if validation error on name.
+
+        If not, update the status.
+        """
+        pretty = self.query_one(Pretty)
+        if event.validation_result and not not event.validation_result.is_valid:
+            pretty.display = True
+            pretty.update(event.validation_result.failure_descriptions)
+        else:
+            pretty.update([])
+            pretty.display = False
+
+    @on(Button.Pressed, "#choice-ok")
+    def on_ok(self, event: Button.Pressed) -> None:
+        """
+        Return the user's choice back to the calling application and dismiss the dialog
+        """
+        iput = self.query_one("Input")
+        if not iput.value or self.is_name_valid == False:
+            iput.focus()
+        else:
+            self.dismiss(NewGroup(iput.value, self.query_one("Checkbox").value))
 
 
 class AddProfile(ModalScreen[NewProfile | None]):
