@@ -58,14 +58,17 @@ class AddBase(ModalScreen[ScreenResultType]):
         border: white 80%;
         content-align: center middle;
         margin: 1;
-        Pretty {
-            margin: 1;
-        }
+    }
+    Pretty {
+        margin: 1;
     }
     .center {
         content-align: center middle;
     }
-    .name_input {
+    .input_field {
+        margin:1;
+    }
+    .margin_one {
         margin:1;
     }
     Button {
@@ -74,9 +77,9 @@ class AddBase(ModalScreen[ScreenResultType]):
     }
     """
 
-    def __init__(self, group_names: list[str], name=None, id=None, classes=None):
+    def __init__(self, config_names: list[str], name=None, id=None, classes=None):
         super().__init__(name, id, classes)
-        self.names = group_names or []
+        self.names = config_names or []
         self.is_name_valid = False
 
     def _validate_name(self, in_value: str) -> bool:
@@ -93,7 +96,7 @@ class AddBase(ModalScreen[ScreenResultType]):
             Pretty([], classes="center"),
             Input(
                 placeholder="Enter name (3-32 chars)",
-                classes="name_input",
+                classes="input_field",
                 max_length=32,
                 validators=[
                     validator.Regex("^[a-zA-Z_-]{3,32}$"),
@@ -101,7 +104,9 @@ class AddBase(ModalScreen[ScreenResultType]):
                 ],
                 id="add_name",
             ),
-            Checkbox("Make Active?", compact=True, button_first=False),
+            Checkbox(
+                "Make Active?", compact=True, button_first=False, classes="margin_one"
+            ),
             Center(
                 Horizontal(
                     Button("OK", variant="primary", id="choice-ok"),
@@ -113,16 +118,24 @@ class AddBase(ModalScreen[ScreenResultType]):
 
     def _on_mount(self, event: events.Mount) -> None:
         self.query_one(Pretty).display = False
-        center = self.query_one(Center)
-        self._post_mount(event, center)
-
-    def _post_mount(self, event: events.Mount, container: Widget) -> None:
-        """Default post_mount does nothing"""
-        pass
+        container = self.query_one(VerticalScroll)
+        self.post_mount(event, container)
+        self.query_one("#add_name").focus()
 
     async def _on_key(self, event: events.Key) -> None:
         if event.name == "escape":
             self.dismiss(None)
+
+    @on(Input.Changed, "#add_name")
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """Check if validation error on name."""
+        pretty = self.query_one(Pretty)
+        if event.validation_result and not event.validation_result.is_valid:
+            pretty.display = True
+            pretty.update(event.validation_result.failure_descriptions)
+        else:
+            pretty.update([])
+            pretty.display = False
 
     @on(Button.Pressed, "#choice-cancel")
     def on_cancel(self, event: Button.Pressed) -> None:
@@ -137,207 +150,108 @@ class AddGroup(AddBase[NewGroup | None]):
 
     TITLE = "Add a new Group"
 
-    def _post_mount(self, event: events.Mount, center: Widget) -> None:
+    def post_mount(self, event: events.Mount, container: Widget) -> None:
         """Called post mount for adding new widgets."""
         return
-
-    @on(Input.Changed)
-    def on_input_changed(self, event: Input.Changed) -> None:
-        """Check if validation error on name.
-
-        If not, update the status.
-        """
-        pretty = self.query_one(Pretty)
-        if event.validation_result and not not event.validation_result.is_valid:
-            pretty.display = True
-            pretty.update(event.validation_result.failure_descriptions)
-        else:
-            pretty.update([])
-            pretty.display = False
 
     @on(Button.Pressed, "#choice-ok")
     def on_ok(self, event: Button.Pressed) -> None:
         """
         Return the user's choice back to the calling application and dismiss the dialog
         """
-        iput = self.query_one("Input")
+        iput = self.query_one("#add_name")
         if not iput.value or self.is_name_valid == False:
             iput.focus()
         else:
             self.dismiss(NewGroup(iput.value, self.query_one("Checkbox").value))
 
 
-class AddProfile(ModalScreen[NewProfile | None]):
+class AddProfile(AddBase[NewProfile | None]):
     """Add profile dialog that accepts a name, url and active flag."""
-
-    DEFAULT_CSS = """
-    AddProfile {
-        width: 50%;
-        align: center middle;    
-        background: $primary 10%;   
-        border: white; 
-    }
-    #add-profile-dlg {
-        width: 50%;
-        height: 50%;
-        border: white 80%;
-        content-align: center middle;
-        margin: 1;
-    }
-    .center {
-        content-align: center middle;
-    }
-    .profile_input {
-        margin:1;
-    }
-    Button {
-        width: 20%;
-        margin: 1;
-    }
-    """
 
     TITLE = "Add a new Profile"
 
-    def compose(self):
-        yield VerticalScroll(
-            Header(id="add_profile_header"),
-            Input(
-                placeholder="Enter profile name (3-32 chars)",
-                classes="profile_input",
-                max_length=32,
-                validators=[validator.Regex("^[a-zA-Z_-]{3,32}$")],
-                id="profile_name",
-            ),
-            Input(
-                placeholder="Enter profile URL",
-                classes="profile_input",
-                validators=[validator.URL()],
-                id="profile_url",
-            ),
-            Checkbox("Make Active?"),
-            Center(
-                Horizontal(
-                    Button("OK", variant="primary", id="choice-ok"),
-                    Button("Cancel", variant="error", id="choice-cancel"),
+    def post_mount(self, event: events.Mount, container: Widget) -> None:
+        """Called post mount for adding new widgets."""
+        for idx, widg in enumerate(container.children):
+            if isinstance(widg, Checkbox):
+                container.mount(
+                    Input(
+                        placeholder="Enter profile URL",
+                        classes="input_field",
+                        validators=[validator.URL()],
+                        id="profile_url",
+                    ),
+                    before=idx,
                 )
-            ),
-            id="add-profile-dlg",
-        )
-
-    def _on_key(self, event: events.Key) -> None:
-        if event.name == "escape":
-            self.dismiss(None)
-        return super()._on_key(event)
+                break
 
     @on(Button.Pressed, "#choice-ok")
     def on_ok(self, event: Button.Pressed) -> None:
         """
         Return the user's choice back to the calling application and dismiss the dialog
         """
-        iput = self.query_one("#profile_name")
+        iput = self.query_one("#add_name")
         if not iput.value:
             iput.focus()
+            iput = None
+            return
         iurl = self.query_one("#profile_url")
         if not iurl.value:
             iurl.focus()
-        else:
-            self.dismiss(
-                NewProfile(iput.value, iurl.value, self.query_one("Checkbox").value)
-            )
-
-    @on(Button.Pressed, "#choice-cancel")
-    def on_cancel(self, event: Button.Pressed) -> None:
-        """
-        Returns None to the calling application and dismisses the dialog
-        """
-        self.dismiss(None)
+            iurl = None
+            return
+        self.dismiss(
+            NewProfile(iput.value, iurl.value, self.query_one("Checkbox").value)
+        )
 
 
 # Alias name, key scheme type, word count and derivation path
-class AddIdentity(ModalScreen[NewIdentity | None]):
+class AddIdentity(AddBase[NewIdentity | None]):
     """Add identity dialog that key provisioning directives."""
 
     TITLE = "Add a new Identity"
 
-    DEFAULT_CSS = """
-    AddIdentity {
-        width: 50%;
-        align: center middle;    
-        background: $primary 10%;   
-        border: white; 
-    }
-    #add-identity-dlg {
-        width: 50%;
-        height: 65%;
-        border: white 80%;
-        content-align: center middle;
-    }
-    RadioSet Checkbox {
-        margin: 1;
-    }
-    .center {
-        content-align: center middle;
-    }
-    .id_input {
-        margin:1;
-    }
-    Button {
-        width: 20%;
-        margin: 1;
-    }
-    """
-
-    def compose(self):
-        self.ktindex = -1
-        yield VerticalScroll(
-            Header(id="add_identity_header"),
-            Input(
-                placeholder="Enter identity alias (3-32 chars)",
-                classes="id_input",
-                validators=[validator.Regex("^[a-zA-Z_-]{3,32}$")],
-                max_length=32,
-                id="id_alias",
-            ),
-            RadioSet("ED25519", "SECP256K1", "SECP256R1", id="id_keytype"),
-            Input(
-                placeholder="Enter word count (i.e. 12,15,18,21,24), defaults to 12",
-                classes="id_input",
-                type="integer",
-                max_length=2,
-                validators=[validator.Regex(r"^12$|^15$|^18$|^21$|^24$")],
-                valid_empty=True,
-                id="id_word_count",
-            ),
-            Input(
-                placeholder="Optional derivation path",
-                classes="id_input",
-                id="id_derv",
-            ),
-            Checkbox("Make Active?"),
-            Center(
-                Horizontal(
-                    Button("OK", variant="primary", id="choice-ok"),
-                    Button("Cancel", variant="error", id="choice-cancel"),
+    def post_mount(self, event: events.Mount, container: Widget) -> None:
+        """Called post mount for adding new widgets."""
+        for idx, widg in enumerate(container.children):
+            if isinstance(widg, Checkbox):
+                container.mount(
+                    RadioSet(
+                        "ED25519",
+                        "SECP256K1",
+                        "SECP256R1",
+                        id="id_keytype",
+                        classes="margin_one",
+                    ),
+                    Input(
+                        placeholder="Enter word count (i.e. 12,15,18,21,24), defaults to 12",
+                        classes="id_input",
+                        type="integer",
+                        max_length=2,
+                        validators=[validator.Regex(r"^12$|^15$|^18$|^21$|^24$")],
+                        valid_empty=True,
+                        id="id_word_count",
+                    ),
+                    Input(
+                        placeholder="Optional derivation path",
+                        classes="id_input",
+                        id="id_derv",
+                    ),
+                    before=idx,
                 )
-            ),
-            id="add-identity-dlg",
-        )
+                break
 
     def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
         self.ktindex = event.radio_set.pressed_index
-
-    def _on_key(self, event: events.Key) -> None:
-        if event.name == "escape":
-            self.dismiss(None)
-        return super()._on_key(event)
 
     @on(Button.Pressed, "#choice-ok")
     def on_ok(self, event: Button.Pressed) -> None:
         """
         Return the user's choice back to the calling application and dismiss the dialog
         """
-        ialias = self.query_one("#id_alias")
-        if not ialias.value:
+        ialias = self.query_one("#add_name")
+        if not ialias.value or self.is_name_valid == False:
             ialias.focus()
             ialias = None
 
@@ -359,10 +273,3 @@ class AddIdentity(ModalScreen[NewIdentity | None]):
                     self.query_one("Checkbox").value,
                 )
             )
-
-    @on(Button.Pressed, "#choice-cancel")
-    def on_cancel(self, event: Button.Pressed) -> None:
-        """
-        Returns None to the calling application and dismisses the dialog
-        """
-        self.dismiss(None)

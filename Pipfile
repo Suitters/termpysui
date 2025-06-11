@@ -4,13 +4,13 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-textual-dev = "*"
 pip = "*"
 textual = "*"
-pysui = {file = "../pysui"}
 doc8 = "*"
+pysui = {file = "../../frankc01/pysui"}
 
 [dev-packages]
+textual-dev = "*"
 
 [requires]
 python_version = "3.12"

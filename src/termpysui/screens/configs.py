@@ -268,11 +268,10 @@ class ConfigProfile(ConfigRow):
 
     @work()
     async def add_profile(self):
-        new_profile: NewProfile = await self.app.push_screen_wait(AddProfile())
-        if (
-            new_profile is not None
-            and new_profile.name not in self.configuration_group.profile_names
-        ):
+        new_profile: NewProfile = await self.app.push_screen_wait(
+            AddProfile(self.configuration_group.profile_names)
+        )
+        if new_profile:
             table: EditableDataTable = self.query_one("#config_profile")
             prf = Profile(new_profile.name, new_profile.url)
             self.configuration_group.add_profile(
@@ -399,10 +398,12 @@ class ConfigIdentities(ConfigRow):
 
     @work()
     async def add_identity(self):
-        new_ident: NewIdentity = await self.app.push_screen_wait(AddIdentity())
         alias_list = [x.alias for x in self.configuration_group.alias_list]
-        if new_ident and new_ident.alias not in alias_list:
+        new_ident: NewIdentity = await self.app.push_screen_wait(
+            AddIdentity(alias_list)
+        )
 
+        if new_ident:
             # Generate the new key based on user input
             mnem, addy, prfkey, prfalias = self.configuration_group.new_keypair_parts(
                 of_keytype=new_ident.key_scheme,
