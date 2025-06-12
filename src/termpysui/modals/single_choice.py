@@ -2,7 +2,7 @@
 
 """Single choice dialog."""
 
-from textual import on
+from textual import on, events
 from textual.app import ComposeResult
 from textual.containers import Center, Horizontal, Vertical
 from textual.screen import ModalScreen
@@ -90,3 +90,7 @@ class SingleChoiceDialog(ModalScreen):
         Returns False to the calling application and dismisses the dialog
         """
         self.dismiss(False)
+
+    async def _on_key(self, event: events.Key) -> None:
+        if event.name == "escape":
+            self.dismiss(None)

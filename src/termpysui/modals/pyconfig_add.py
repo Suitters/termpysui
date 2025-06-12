@@ -117,6 +117,9 @@ class AddBase(ModalScreen[ScreenResultType]):
             id="add-dlg",
         )
 
+    def post_mount(self, event: events.Mount, container: Widget) -> None:
+        pass
+
     def _on_mount(self, event: events.Mount) -> None:
         container = self.query_one(VerticalScroll)
         self.post_mount(event, container)
@@ -158,11 +161,11 @@ class AddGroup(AddBase[NewGroup | None]):
         """
         Return the user's choice back to the calling application and dismiss the dialog
         """
-        iput = self.query_one("#add_name")
+        iput = self.query_one("#add_name", Input)
         if not iput.value or self.is_name_valid == False:
             iput.focus()
         else:
-            self.dismiss(NewGroup(iput.value, self.query_one("Checkbox").value))
+            self.dismiss(NewGroup(iput.value, self.query_one(Checkbox).value))
 
 
 class AddProfile(AddBase[NewProfile | None]):
@@ -190,19 +193,15 @@ class AddProfile(AddBase[NewProfile | None]):
         """
         Return the user's choice back to the calling application and dismiss the dialog
         """
-        iput = self.query_one("#add_name")
+        iput = self.query_one("#add_name", Input)
         if not iput.value:
             iput.focus()
-            iput = None
             return
-        iurl = self.query_one("#profile_url")
+        iurl = self.query_one("#profile_url", Input)
         if not iurl.value:
             iurl.focus()
-            iurl = None
             return
-        self.dismiss(
-            NewProfile(iput.value, iurl.value, self.query_one("Checkbox").value)
-        )
+        self.dismiss(NewProfile(iput.value, iurl.value, self.query_one(Checkbox).value))
 
 
 # Alias name, key scheme type, word count and derivation path
@@ -249,26 +248,26 @@ class AddIdentity(AddBase[NewIdentity | None]):
         """
         Return the user's choice back to the calling application and dismiss the dialog
         """
-        ialias = self.query_one("#add_name")
+        ialias: Input = self.query_one("#add_name", Input)
         if not ialias.value or self.is_name_valid == False:
             ialias.focus()
-            ialias = None
+            return
 
         if self.ktindex < 0:
             self.query_one("#id_keytype").focus()
 
-        idwc = self.query_one("#id_word_count").value
+        idwc = self.query_one("#id_word_count", Input).value
         if not idwc:
             idwc = 12
 
-        iderv = self.query_one("#id_derv").value
+        iderv = self.query_one("#id_derv", Input).value
         if ialias:
             self.dismiss(
                 NewIdentity(
                     ialias.value,
                     SignatureScheme(self.ktindex),
-                    idwc,
+                    int(idwc),
                     iderv,
-                    self.query_one("Checkbox").value,
+                    self.query_one(Checkbox).value,
                 )
             )

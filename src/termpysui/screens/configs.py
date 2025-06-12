@@ -95,7 +95,7 @@ class ConfigRow(Container):
 
     def _switch_active(self, cell: EditableDataTable.CellValueChange) -> Coordinate:
         """Change the active row."""
-        new_active_coord: Coordinate = None
+        new_active_coord: Coordinate = Coordinate(0, 0)
         # The current was 'Active', find an alternative or ignore if solo
         if cell.old_value == "Yes":
             new_active_coord = cell.table.switch_active(
