@@ -17,7 +17,7 @@ from textual.containers import (
 from textual.screen import ModalScreen, ScreenResultType
 import textual.validation as validator
 from textual.widget import Widget
-from textual.widgets import Input, Button, Checkbox, Header, RadioSet, Pretty
+from textual.widgets import Input, Button, Checkbox, Header, RadioSet, Label
 
 from pysui.abstracts.client_keypair import SignatureScheme
 
@@ -48,18 +48,19 @@ class NewIdentity:
 class AddBase(ModalScreen[ScreenResultType]):
 
     DEFAULT_CSS = """
-    Screen {
+    AddBase {
         align: center middle;    
         background: $primary 10%;   
+        margin: 1;
     }
-    #add-dlg {
+    VerticalScroll {
         width: 50%;
         height: 50%;
         border: white 80%;
         content-align: center middle;
         margin: 1;
     }
-    Pretty {
+    Label {
         margin: 1;
     }
     .center {
@@ -73,7 +74,8 @@ class AddBase(ModalScreen[ScreenResultType]):
     }
     Button {
         width: 20%;
-        margin: 1;
+        height: 20%;
+        margin: 1;        
     }
     """
 
@@ -85,7 +87,6 @@ class AddBase(ModalScreen[ScreenResultType]):
     def _validate_name(self, in_value: str) -> bool:
         """."""
         self.is_name_valid = True
-        self.query_one(Pretty).display = False
         if in_value in self.names:
             self.is_name_valid = False
         return self.is_name_valid
@@ -93,7 +94,7 @@ class AddBase(ModalScreen[ScreenResultType]):
     def compose(self) -> ComposeResult:
         yield VerticalScroll(
             Header(),
-            Pretty([], classes="center"),
+            Center(Label("", classes="center")),
             Input(
                 placeholder="Enter name (3-32 chars)",
                 classes="input_field",
@@ -117,7 +118,6 @@ class AddBase(ModalScreen[ScreenResultType]):
         )
 
     def _on_mount(self, event: events.Mount) -> None:
-        self.query_one(Pretty).display = False
         container = self.query_one(VerticalScroll)
         self.post_mount(event, container)
         self.query_one("#add_name").focus()
@@ -129,13 +129,12 @@ class AddBase(ModalScreen[ScreenResultType]):
     @on(Input.Changed, "#add_name")
     def on_input_changed(self, event: Input.Changed) -> None:
         """Check if validation error on name."""
-        pretty = self.query_one(Pretty)
+        ilab = self.query_one(Label)
         if event.validation_result and not event.validation_result.is_valid:
-            pretty.display = True
-            pretty.update(event.validation_result.failure_descriptions)
+            edesc = event.validation_result.failure_descriptions[0]
+            ilab.update(f"[red]{edesc}")
         else:
-            pretty.update([])
-            pretty.display = False
+            ilab.update("")
 
     @on(Button.Pressed, "#choice-cancel")
     def on_cancel(self, event: Button.Pressed) -> None:
@@ -226,7 +225,7 @@ class AddIdentity(AddBase[NewIdentity | None]):
                     ),
                     Input(
                         placeholder="Enter word count (i.e. 12,15,18,21,24), defaults to 12",
-                        classes="id_input",
+                        classes="input_field",
                         type="integer",
                         max_length=2,
                         validators=[validator.Regex(r"^12$|^15$|^18$|^21$|^24$")],
@@ -235,7 +234,7 @@ class AddIdentity(AddBase[NewIdentity | None]):
                     ),
                     Input(
                         placeholder="Optional derivation path",
-                        classes="id_input",
+                        classes="input_field",
                         id="id_derv",
                     ),
                     before=idx,
