@@ -33,6 +33,7 @@ from ..modals import (
     AddIdentity,
     ConfigPicker,
     ConfigSaver,
+    ConfirmDeleteRowDialog,
 )
 from ..modals.pyconfig_add import (
     NewGroup,
@@ -226,6 +227,23 @@ class ConfigGroup(ConfigRow):
             table.move_cursor(row=active_row, column=0, scroll=True)
             # Notify group listeners
             self.config_group_change(cfg.active_group)
+
+    @on(EditableDataTable.RowDelete)
+    def group_row_delete(self, selected: EditableDataTable.RowDelete):
+        """Handle delete"""
+        self.remove_row(selected.table, selected.row_key)
+
+    @work
+    async def remove_row(self, data_table: EditableDataTable, row_key: RowKey) -> None:
+        row_values = [str(value) for value in data_table.get_row(row_key)[:-1]]
+        confirmed = await self.app.push_screen_wait(
+            ConfirmDeleteRowDialog(
+                f"Are you sure you want to delete this row:\n[green]{row_values[0]}"
+            )
+        )
+        if confirmed:
+            pass
+            # data_table.remove_row(row_key)
 
     @on(DataTable.CellSelected)
     def group_cell_select(self, selected: DataTable.CellSelected):

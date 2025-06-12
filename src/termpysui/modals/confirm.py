@@ -6,9 +6,9 @@ from typing import Optional
 
 from textual import events, on
 from textual.app import ComposeResult
-from textual.containers import Vertical, Center
+from textual.containers import Vertical, Center, Horizontal
 from textual.screen import ModalScreen
-from textual.widgets import Button, Markdown
+from textual.widgets import Button, Markdown, Label
 
 EXAMPLE_MARKDOWN = """\
 # New Key Created Document
@@ -70,7 +70,6 @@ class NewKey(ModalScreen[bool]):
     async def _on_key(self, event: events.Key) -> None:
         if event.name == "escape":
             self.dismiss(None)
-        await super()._on_key(event)
 
     @on(Button.Pressed, "#choice-ok")
     def on_ok(self, event: Button.Pressed) -> None:
@@ -78,3 +77,56 @@ class NewKey(ModalScreen[bool]):
         Return the user's choice back to the calling application and dismiss the dialog
         """
         self.dismiss(None)
+
+
+class ConfirmDeleteRowDialog(ModalScreen[bool]):
+
+    DEFAULT_CSS = """
+        ConfirmDeleteRowDialog {
+            align: center middle;
+
+            & Vertical {
+                width: auto;
+                height: auto;
+                background: $panel;
+                border: $secondary round;
+            }
+
+            & Label {
+                margin: 1 2;
+            }
+
+            & Horizontal {
+                width: 100%;
+                height: auto;
+                align: center middle;
+                margin: 1 2;
+
+                & Button {
+                    width: auto;
+                    margin: 0 2;
+                }
+            }
+        }    
+    """
+
+    def __init__(self, msg: str) -> None:
+        super().__init__()
+        self.msg = msg
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Label(self.msg)
+            with Horizontal():
+                yield Button("Delete", id="delete", variant="error")
+                yield Button("Cancel", id="cancel", variant="primary")
+
+    async def _on_key(self, event: events.Key) -> None:
+        if event.name == "escape":
+            self.dismiss(False)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "delete":
+            self.dismiss(True)
+        else:
+            self.dismiss(False)

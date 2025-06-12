@@ -17,7 +17,9 @@ from textual.screen import Screen, ModalScreen
 import textual.validation as validator
 from textual.widgets import DataTable, Input, Pretty
 
-from textual.widgets.data_table import Row
+from textual.widgets.data_table import Row, ColumnKey, RowKey
+
+from ..modals.confirm import ConfirmDeleteRowDialog
 
 
 class EditWidgetScreen(ModalScreen):
@@ -152,18 +154,45 @@ class EditableDataTable(DataTable):
             self.new_value: str = new_value
             super().__init__()
 
+    class RowDelete(Message):
+
+        def __init__(self, table: "EditableDataTable", row_key: RowKey):
+            super().__init__()
+            self.table = table
+            self.row_key = row_key
+
     def __init__(self, edit_config: list[CellConfig], **kwargs):
         super().__init__(**kwargs)
+        self.delete_button = "[bold red]Delete"
         self.edit_config = edit_config
+        self.delte_column = 0
+
+    def add_columns(self, *labels) -> list[ColumnKey]:
+        keys = super().add_columns(*labels)
+        self.delete_column = len(keys)
+        super().add_column("", key="delete")
+        return keys
+
+    def add_row(self, *cells, height=1, key=None, label=None) -> RowKey:
+        cells = [*cells]
+        cells.append(self.delete_button)
+        rkey = super().add_row(*tuple(cells), height=height, key=key, label=label)
+        return rkey
+
+    def on_data_table_cell_selected(self, event: DataTable.CellSelected) -> None:
+        if event.value == self.delete_button:
+            self.post_message(self.RowDelete(event.data_table, event.cell_key.row_key))
 
     async def action_edit(self) -> None:
         coords = self.cursor_coordinate
-        edit_cfg = self.edit_config[coords.column]
-        if edit_cfg.editable:
-            if edit_cfg.inline:
-                self.edit_cell(coordinate=coords, cfg=edit_cfg)
-            elif edit_cfg.dialog:
-                self.edit_dialog(coordinate=coords, cfg=edit_cfg)
+        # Avoid the 'delete' button
+        if coords.column != self.delete_column:
+            edit_cfg = self.edit_config[coords.column]
+            if edit_cfg.editable:
+                if edit_cfg.inline:
+                    self.edit_cell(coordinate=coords, cfg=edit_cfg)
+                elif edit_cfg.dialog:
+                    self.edit_dialog(coordinate=coords, cfg=edit_cfg)
 
     @work()
     async def edit_dialog(self, coordinate: Coordinate, cfg: CellConfig) -> None:

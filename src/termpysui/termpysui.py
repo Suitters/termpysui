@@ -17,7 +17,7 @@ class TermPysuiApp(App):
         ("g", "switch_mode('graphql')", "GraphQL"),
     ]
     MODES = {
-        "configs": PyCfgScreen,  # type: ignore
+        "configs": lambda: PyCfgScreen(),
         "graphql": GraphQLScreen,
     }
 
