@@ -28,6 +28,7 @@ from textual.widgets.data_table import RowKey
 from ..modals import (
     SingleChoiceDialog,
     NewKey,
+    OkPopup,
     AddGroup,
     AddProfile,
     AddIdentity,
@@ -110,6 +111,34 @@ class ConfigRow(Container):
             )
         return new_active_coord
 
+    @on(EditableDataTable.RowDelete)
+    def group_row_delete(self, selected: EditableDataTable.RowDelete):
+        """Handle delete"""
+        self.remove_row(selected.table, selected.row_key)
+
+    @work
+    async def remove_row(self, data_table: EditableDataTable, row_key: RowKey) -> None:
+        row_values = [str(value) for value in data_table.get_row(row_key)[:-1]]
+        confirmed = await self.app.push_screen_wait(
+            ConfirmDeleteRowDialog(
+                f"Are you sure you want to delete this row:\n[green]{row_values[0]}"
+            )
+        )
+        if confirmed:
+            self.dropping_row(data_table, row_key, row_values[0], row_values[1])
+
+    def dropping_row(
+        self,
+        from_table: EditableDataTable,
+        row_key: RowKey,
+        row_name: str,
+        active_flag: str,
+    ) -> None:
+        """Defult row removal."""
+        raise NotImplementedError(
+            f"Drop for '{row_name}' in {row_key} not implemented and active is {active_flag}."
+        )
+
 
 class ConfigGroup(ConfigRow):
 
@@ -185,6 +214,30 @@ class ConfigGroup(ConfigRow):
             self.configuration.save()
             self.config_group_change(self.configuration.active_group)
 
+    def dropping_row(
+        self,
+        from_table: EditableDataTable,
+        row_key: RowKey,
+        row_name: str,
+        active_flag: str,
+    ) -> None:
+        # Change PysuiConfig
+        if from_table.row_count > 1:
+            new_active = self.configuration.model.remove_group(group_name=row_name)
+            # Handle active switch
+            grp_change = None
+            if active_flag == "Yes" and new_active:
+                from_table.switch_active((0, row_name), (0, new_active))
+                grp_change: ProfileGroup = self.configuration.active_group
+            # Delete from table
+            from_table.remove_row(row_key)
+            # Save PysuiConfig
+            self.configuration.save()
+            if grp_change:
+                self.config_group_change(grp_change)
+        else:
+            self.app.push_screen(OkPopup("[red]Can not delete only group"))
+
     @on(EditableDataTable.CellValueChange)
     def cell_change(self, cell: EditableDataTable.CellValueChange):
         """When a cell changes"""
@@ -227,23 +280,6 @@ class ConfigGroup(ConfigRow):
             table.move_cursor(row=active_row, column=0, scroll=True)
             # Notify group listeners
             self.config_group_change(cfg.active_group)
-
-    @on(EditableDataTable.RowDelete)
-    def group_row_delete(self, selected: EditableDataTable.RowDelete):
-        """Handle delete"""
-        self.remove_row(selected.table, selected.row_key)
-
-    @work
-    async def remove_row(self, data_table: EditableDataTable, row_key: RowKey) -> None:
-        row_values = [str(value) for value in data_table.get_row(row_key)[:-1]]
-        confirmed = await self.app.push_screen_wait(
-            ConfirmDeleteRowDialog(
-                f"Are you sure you want to delete this row:\n[green]{row_values[0]}"
-            )
-        )
-        if confirmed:
-            pass
-            # data_table.remove_row(row_key)
 
     @on(DataTable.CellSelected)
     def group_cell_select(self, selected: DataTable.CellSelected):
@@ -304,7 +340,23 @@ class ConfigProfile(ConfigRow):
             if new_profile.active:
                 table.switch_active((1, "Yes"), (0, new_profile.name), set_focus=True)
             self.configuration.save()
-            # self.config_group_change(self.configuration.active_group)
+
+    def dropping_row(
+        self,
+        from_table: EditableDataTable,
+        row_key: RowKey,
+        row_name: str,
+        active_flag: str,
+    ) -> None:
+        # Change PysuiConfig
+        new_active = self.configuration_group.remove_profile(profile_name=row_name)
+        # Handle active switch
+        if active_flag == "Yes" and new_active:
+            from_table.switch_active((0, row_name), (0, new_active))
+        # Delete from table
+        from_table.remove_row(row_key)
+        # Save PysuiConfig
+        self.configuration.save()
 
     def validate_profile_name(self, table: EditableDataTable, in_value: str) -> bool:
         """Validate no rename collision."""
@@ -455,6 +507,23 @@ class ConfigIdentities(ConfigRow):
             )
             _ = await self.app.push_screen_wait(NewKey(mnem, prfkey.private_key_base64))
             self.configuration.save()
+
+    def dropping_row(
+        self,
+        from_table: EditableDataTable,
+        row_key: RowKey,
+        row_name: str,
+        active_flag: str,
+    ) -> None:
+        # Change PysuiConfig
+        new_active = self.configuration_group.remove_alias(alias_name=row_name)
+        # Handle active switch
+        if active_flag == "Yes" and new_active:
+            from_table.switch_active((0, row_name), (0, new_active))
+        # Delete from table
+        from_table.remove_row(row_key)
+        # Save PysuiConfig
+        self.configuration.save()
 
     def validate_alias_name(self, table: EditableDataTable, in_value: str) -> bool:
         """Validate no rename collision."""

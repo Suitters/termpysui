@@ -21,7 +21,7 @@ _Private key_: '**{private key}**'
 """
 
 
-class NewKey(ModalScreen[bool]):
+class NewKey(ModalScreen[None]):
 
     DEFAULT_CSS = """
     NewKey {
@@ -77,6 +77,55 @@ class NewKey(ModalScreen[bool]):
         Return the user's choice back to the calling application and dismiss the dialog
         """
         self.dismiss(None)
+
+
+class OkPopup(ModalScreen[bool]):
+
+    DEFAULT_CSS = """
+        OkPopup {
+            align: center middle;
+
+            & Vertical {
+                width: auto;
+                height: auto;
+                background: $panel;
+                border: $secondary round;
+            }
+
+            & Label {
+                margin: 1 2;
+            }
+
+            & Horizontal {
+                width: 100%;
+                height: auto;
+                align: center middle;
+                margin: 1 2;
+
+                & Button {
+                    width: auto;
+                    margin: 0 2;
+                }
+            }
+        }    
+    """
+
+    def __init__(self, msg: str) -> None:
+        super().__init__()
+        self.msg = msg
+
+    def compose(self) -> ComposeResult:
+        with Vertical():
+            yield Label(self.msg)
+            with Horizontal():
+                yield Button("Ok", id="confirm", variant="primary")
+
+    async def _on_key(self, event: events.Key) -> None:
+        if event.name == "escape":
+            self.dismiss(False)
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        self.dismiss(True)
 
 
 class ConfirmDeleteRowDialog(ModalScreen[bool]):
