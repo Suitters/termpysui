@@ -7,5 +7,27 @@
 
 from .configfm import ConfigSaver, ConfigPicker
 from .confirm import NewKey, ConfirmDeleteRowDialog, OkPopup
-from .pyconfig_add import AddGroup, AddProfile, AddIdentity
+from .pyconfig_add import (
+    AddGroup,
+    AddProfile,
+    AddIdentity,
+    NewGroup,
+    NewIdentity,
+    NewProfile,
+)
 from .single_choice import SingleChoiceDialog
+
+__all__ = [
+    "ConfigSaver",
+    "ConfigPicker",
+    "NewKey",
+    "ConfirmDeleteRowDialog",
+    "OkPopup",
+    "AddGroup",
+    "NewGroup",
+    "AddProfile",
+    "NewProfile",
+    "AddIdentity",
+    "NewIdentity",
+    "SingleChoiceDialog",
+]

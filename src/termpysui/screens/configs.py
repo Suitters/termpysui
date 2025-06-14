@@ -25,25 +25,11 @@ from textual.widgets import (
 
 from textual.widgets.data_table import RowKey
 
-from ..modals import (
-    SingleChoiceDialog,
-    NewKey,
-    OkPopup,
-    AddGroup,
-    AddProfile,
-    AddIdentity,
-    ConfigPicker,
-    ConfigSaver,
-    ConfirmDeleteRowDialog,
-)
-from ..modals.pyconfig_add import (
-    NewGroup,
-    NewIdentity,
-    NewProfile,
-)
+from ..modals import *
+
 from ..widgets.editable_table import EditableDataTable, CellConfig
 from pysui import PysuiConfiguration
-from pysui.sui.sui_pgql.config.confgroup import ProfileGroup, Profile, ProfileAlias
+from pysui.sui.sui_pgql.config.confgroup import ProfileGroup, Profile
 
 
 class ConfigRow(Container):

@@ -16,10 +16,9 @@ from textual.message import Message
 from textual.screen import Screen, ModalScreen
 import textual.validation as validator
 from textual.widgets import DataTable, Input, Pretty
-
 from textual.widgets.data_table import Row, ColumnKey, RowKey
 
-from ..modals.confirm import ConfirmDeleteRowDialog
+from ..modals import OkPopup
 
 
 class EditWidgetScreen(ModalScreen):
@@ -188,11 +187,16 @@ class EditableDataTable(DataTable):
         # Avoid the 'delete' button
         if coords.column != self.delete_column:
             edit_cfg = self.edit_config[coords.column]
-            if edit_cfg.editable:
-                if edit_cfg.inline:
-                    self.edit_cell(coordinate=coords, cfg=edit_cfg)
-                elif edit_cfg.dialog:
-                    self.edit_dialog(coordinate=coords, cfg=edit_cfg)
+            if edit_cfg.field_name == "Active" and self.row_count > 1:
+                if edit_cfg.editable:
+                    if edit_cfg.inline:
+                        self.edit_cell(coordinate=coords, cfg=edit_cfg)
+                    elif edit_cfg.dialog:
+                        self.edit_dialog(coordinate=coords, cfg=edit_cfg)
+            else:
+                self.app.push_screen(
+                    OkPopup("[red]Can not change Active state for only row")
+                )
 
     @work()
     async def edit_dialog(self, coordinate: Coordinate, cfg: CellConfig) -> None:
@@ -280,11 +284,15 @@ class EditableDataTable(DataTable):
         to_row = self.row_with_value(*to_t)
         active_coordinate = None
         if from_row:
+            active_coordinate = Coordinate(
+                row=int(str(from_row[0].label)) - 1, column=1
+            )
             self.update_cell_at(
-                Coordinate(row=int(str(from_row[0].label)) - 1, column=1),
+                active_coordinate,
                 "No",
                 update_width=False,
             )
+        # Edge case, we have 1 row (from) and it is moving it's state
         if to_row:
             active_coordinate = Coordinate(row=int(str(to_row[0].label)) - 1, column=1)
             self.update_cell_at(
@@ -292,8 +300,6 @@ class EditableDataTable(DataTable):
                 "Yes",
                 update_width=True,
             )
-        else:
-            raise ValueError(f"No row found at tuple {to_t}")
         if set_focus:
             self.focus()
             self.move_cursor(row=active_coordinate.row, column=0)

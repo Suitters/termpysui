@@ -201,7 +201,8 @@ class AddProfile(AddBase[NewProfile | None]):
         if not iurl.value:
             iurl.focus()
             return
-        self.dismiss(NewProfile(iput.value, iurl.value, self.query_one(Checkbox).value))
+        is_active = self.query_one(Checkbox).value if self.names else True
+        self.dismiss(NewProfile(iput.value, iurl.value, is_active))
 
 
 # Alias name, key scheme type, word count and derivation path
@@ -260,6 +261,8 @@ class AddIdentity(AddBase[NewIdentity | None]):
         if not idwc:
             idwc = 12
 
+        is_active = self.query_one(Checkbox).value if self.names else True
+
         iderv = self.query_one("#id_derv", Input).value
         if ialias:
             self.dismiss(
@@ -268,6 +271,6 @@ class AddIdentity(AddBase[NewIdentity | None]):
                     SignatureScheme(self.ktindex),
                     int(idwc),
                     iderv,
-                    self.query_one(Checkbox).value,
+                    is_active,
                 )
             )
