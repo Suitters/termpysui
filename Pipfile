@@ -7,7 +7,7 @@ name = "pypi"
 pip = "*"
 textual = "*"
 doc8 = "*"
-pysui = {file = "../../frankc01/pysui"}
+pysui = "*"
 
 [dev-packages]
 textual-dev = "*"

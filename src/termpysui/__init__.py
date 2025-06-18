@@ -1,5 +1,5 @@
 #
 """TermPysui central."""
 
-from .screens import PyCfgScreen, GraphQLScreen
+from .screens import PyCfgScreen
 from .modals import *

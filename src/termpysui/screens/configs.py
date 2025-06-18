@@ -624,9 +624,12 @@ class PyCfgScreen(Screen[None]):
     """
 
     BINDINGS = [
-        ("ctrl+f", "select", "Select PysuiConfig"),
-        ("ctrl+s", "savecfg", "Save to new location"),
+        ("ctrl+f", "select", "Select config"),
+        ("ctrl+s", "savecfg", "Save a copy"),
+        ("ctrl+n", "newcfg", "Create a new config"),
     ]
+
+    configuration: reactive[PysuiConfiguration | None] = reactive(None, bindings=True)
 
     def __init__(self, name: str = None, id: str = None, classes: str = None):
         self.config_sections = [
@@ -646,6 +649,22 @@ class PyCfgScreen(Screen[None]):
                     yield section_class(name=section_name)
         yield Footer()
 
+    async def action_newcfg(self) -> None:
+        """Create a new PysuiConfig.yaml."""
+        self.new_configuration()
+
+    @work()
+    async def new_configuration(self) -> None:
+        """Do the work for creatinig new configuration."""
+
+        def check_selection(selected: Path | None) -> None:
+            """Called when ConfigSaver is dismissed."""
+            if selected:
+                pass
+                # ConfigRow.config_change(new_fq_path)
+
+        self.app.push_screen(NewConfiguration(), check_selection)
+
     async def action_savecfg(self) -> None:
         """Save configuration to new location."""
         self.save_to()
@@ -658,24 +677,12 @@ class PyCfgScreen(Screen[None]):
             """Called when ConfigSaver is dismissed."""
             if selected:
                 new_fq_path = selected / "PysuiConfig.json"
-                _has_config = ConfigRow.has_config()
-                if not _has_config:
-                    cfg = PysuiConfiguration.initialize_config(
-                        in_folder=selected,
-                        init_groups=[
-                            {
-                                "name": PysuiConfiguration.SUI_USER_GROUP,
-                                "graphql_from_sui": False,
-                                "make_active": True,
-                            }
-                        ],
-                    )
-
-                else:
-                    _has_config.save_to(selected)
+                ConfigRow.has_config().save_to(selected)
                 # Notify change
                 self.title = f"Pysui Configuration: {new_fq_path}"
                 ConfigRow.config_change(new_fq_path)
+                # Update footer
+                self.configuration = ConfigRow.has_config()
 
         self.app.push_screen(ConfigSaver(), check_selection)
 
@@ -691,5 +698,12 @@ class PyCfgScreen(Screen[None]):
             if selected:
                 self.title = f"Pysui Configuration: {selected}"
                 ConfigRow.config_change(selected)
+                self.configuration = ConfigRow.has_config()
 
         self.app.push_screen(ConfigPicker(), check_selection)
+
+    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
+        """Check if an action may run."""
+        if action == "savecfg" and self.configuration is None:
+            return None
+        return True

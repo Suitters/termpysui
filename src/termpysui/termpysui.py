@@ -6,19 +6,18 @@
 """Termpysui TUI Application."""
 
 from textual.app import App
-from .screens import PyCfgScreen, GraphQLScreen
+from .screens import PyCfgScreen
+from textual.binding import Binding
 
 
 class TermPysuiApp(App):
     """A Textual app to manage configurations."""
 
-    BINDINGS = [
-        ("c", "switch_mode('configs')", "Configs"),
-        ("g", "switch_mode('graphql')", "GraphQL"),
-    ]
+    # BINDINGS = [
+    #     Binding("c", "switch_mode('configs')", "Configs", show=False),
+    # ]
     MODES = {
         "configs": lambda: PyCfgScreen(),
-        "graphql": GraphQLScreen,
     }
 
     def on_mount(self) -> None:
