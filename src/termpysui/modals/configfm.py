@@ -59,7 +59,7 @@ class ConfigPicker(ModalScreen[Path | None]):
         if event.path.name == "PysuiConfig.json":
             self.dismiss(event.path)
 
-    def _on_key(self, event: events.Key) -> None:
+    async def _on_key(self, event: events.Key) -> None:
         if event.name == "escape":
             self.dismiss(None)
         return super()._on_key(event)
@@ -103,7 +103,7 @@ class ConfigSaver(ModalScreen[Path | None]):
             yield ConfigDir("~/", classes="dir_list")
         # return super().compose()
 
-    def _on_key(self, event: events.Key) -> None:
+    async def _on_key(self, event: events.Key) -> None:
         if event.name == "escape":
             self.dismiss(None)
         return super()._on_key(event)
@@ -122,3 +122,32 @@ class ConfigSaver(ModalScreen[Path | None]):
         """
         input: Input = self.query_one("Input")
         self.dismiss(Path(input.value))
+
+
+class ConfigFolder(ModalScreen[Path | None]):
+    """Save to configuration."""
+
+    DEFAULT_CSS = """
+    ConfigFolder {
+        align: center top;        
+    }
+    .dir_list {
+        align: center top;
+        width: 80;  # Width of the modal
+        height: 20; # Height of the modal
+        border: blue;
+    }
+    """
+
+    def compose(self) -> ComposeResult:
+        yield ConfigDir("~/", classes="dir_list")
+
+    async def _on_key(self, event: events.Key) -> None:
+        if event.name == "escape":
+            self.dismiss(None)
+        return super()._on_key(event)
+
+    @on(DirectoryTree.DirectorySelected)
+    def fd_selected(self, event: DirectoryTree.DirectorySelected):
+        if not event.path.is_file():
+            self.dismiss(event.path)
