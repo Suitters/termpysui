@@ -16,7 +16,7 @@ from .pyconfig_add import (
     NewProfile,
 )
 from .single_choice import SingleChoiceDialog
-from .pyconfig_new import NewConfiguration
+from .pyconfig_new import NewConfiguration, NewConfig
 
 __all__ = [
     "ConfigSaver",
@@ -32,4 +32,5 @@ __all__ = [
     "NewIdentity",
     "SingleChoiceDialog",
     "NewConfiguration",
+    "NewConfig",
 ]

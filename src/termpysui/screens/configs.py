@@ -69,7 +69,11 @@ class ConfigRow(Container):
     @classmethod
     def config_change(cls, config_path: Path) -> None:
         """Dispatch configuration change."""
-        cpath = config_path.parent
+        cpath = (
+            config_path.parent
+            if config_path.name == "PysuiConfig.json"
+            else config_path
+        )
         pysuicfg = PysuiConfiguration(from_cfg_path=cpath)
         for row in cls._CONFIG_ROWS:
             row.query_one("Button").disabled = False
@@ -657,11 +661,38 @@ class PyCfgScreen(Screen[None]):
     async def new_configuration(self) -> None:
         """Do the work for creatinig new configuration."""
 
-        def check_selection(selected: Path | None) -> None:
+        def check_selection(selected: NewConfig | None) -> None:
             """Called when ConfigSaver is dismissed."""
             if selected:
-                pass
-                # ConfigRow.config_change(new_fq_path)
+                gen_maps: list[dict] = []
+                if selected.setup_graphql:
+                    gen_maps.append(
+                        {
+                            "name": PysuiConfiguration.SUI_GQL_RPC_GROUP,
+                            "graphql_from_sui": True,
+                            "grpc_from_sui": False,
+                        }
+                    )
+                if selected.setup_grpc:
+                    gen_maps.append(
+                        {
+                            "name": PysuiConfiguration.SUI_GRPC_GROUP,
+                            "graphql_from_sui": False,
+                            "grpc_from_sui": True,
+                        }
+                    )
+                gen_maps.append(
+                    {
+                        "name": PysuiConfiguration.SUI_USER_GROUP,
+                        "graphql_from_sui": False,
+                        "grpc_from_sui": False,
+                        "make_active": True,
+                    }
+                )
+                self.configuration = PysuiConfiguration.initialize_config(
+                    in_folder=selected.config_path, init_groups=gen_maps
+                )
+                ConfigRow.config_change(selected.config_path)
 
         self.app.push_screen(NewConfiguration(), check_selection)
 

@@ -110,7 +110,9 @@ class NewConfiguration(ModalScreen[NewConfig | None]):
                 Button("select", variant="primary", id="dirlist"),
                 classes="folder_set",
             ),
-            SelectionList[int](("GraphQL", 0, True), ("gRPC", 1), classes="group_gen"),
+            SelectionList[int](
+                ("GraphQL", "gql", True), ("gRPC", "grpc"), classes="group_gen"
+            ),
             Horizontal(
                 Button("OK", variant="primary", id="single-choice-ok"),
                 Button("Cancel", variant="error", id="single-choice-cancel"),
@@ -133,7 +135,12 @@ class NewConfiguration(ModalScreen[NewConfig | None]):
 
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id == "single-choice-ok":
-            self.dismiss(NewConfig(None, False, False))
+            gens = self.query_one(SelectionList).selected
+            self.dismiss(
+                NewConfig(
+                    Path(self.query_one(Input).value), "gql" in gens, "grpc" in gens
+                )
+            )
         elif event.button.id == "single-choice-cancel":
             self.dismiss(None)
         elif event.button.id == "dirlist":
