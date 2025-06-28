@@ -7,7 +7,6 @@
 
 from textual.app import App
 from .screens import PyCfgScreen
-from textual.binding import Binding
 
 
 class TermPysuiApp(App):
