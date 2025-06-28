@@ -1,8 +1,16 @@
-===================================================
-termpysui - Pysui TUI application
-===================================================
+=============================================================
+tpysui - Pysui TUI application to manage PysuiConfigurations
+=============================================================
 
 ALPHA ALPHA ALPHA
 
-A python command shell application for managing PysuiConfigurations and... more to come.
+A console TUI. Currently supports managing (create/edit)
+PysuiConfig.toml, which enable profile management for pysui
+GraphQL and gRPC URL, keys, account addresses and aliases.
+
+Install
+-------
+`pip install tpysui`
+
+
 

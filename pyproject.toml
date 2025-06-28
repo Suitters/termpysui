@@ -1,0 +1,40 @@
+# pyproject.toml
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel","setuptools-scm>=8.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tpysui"
+description = 'PysuiConfiguration Editor'
+dynamic = ["version","readme"]
+requires-python = ">=3.10.6"
+license = "Apache-2.0"
+keywords = ["pysui","editor","configuration","software development kit", "sui", "blockchain"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = [
+    "textual < 4.0.0, >= 3.3.0",
+    "pysui < 0.90.0, >= 0.86.0",
+    "pathvalidate < 4.0.0, >= 3.3.1",
+]
+
+[project.scripts]
+tpysui = "tpysui:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "tpysui.version.__version__" }
+readme = { file = ["README.rst"], content-type = "text/x-rst" }
+
+[project.urls]
+changelog = "https://github.com/suitters/tpysui/blob/main/CHANGELOG.md"
+repository = "https://github.com/suitters/tpysui"
+issues = "https://github.com/suitters/tpysui/issues"
+

@@ -127,8 +127,8 @@ class CellConfig:
     field_name: str
     editable: Optional[bool] = True
     inline: Optional[bool] = False
-    validators: validator.Validator | Iterable[validator.Validator] = None
-    dialog: Optional[Callable] = False
+    validators: validator.Validator | Iterable[validator.Validator] | None = None
+    dialog: Optional[Callable] = None
 
 
 class EditableDataTable(DataTable):

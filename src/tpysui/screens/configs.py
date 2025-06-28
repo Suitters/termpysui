@@ -7,6 +7,7 @@
 
 from functools import partial
 from pathlib import Path
+from typing import Optional
 from rich.text import Text
 from textual import work
 from textual.app import ComposeResult
@@ -57,24 +58,24 @@ class ConfigRow(Container):
         )
 
     @classmethod
-    def has_config(cls) -> bool | PysuiConfiguration:
+    def has_config(cls) -> None | PysuiConfiguration:
         """."""
         for row in cls._CONFIG_ROWS:
             if not row.configuration:
-                return False
+                return None
             else:
                 return row.configuration
-        return False
+        return None
 
     @classmethod
     def config_change(cls, config_path: Path) -> None:
         """Dispatch configuration change."""
-        cpath = (
+        cpath: Path = (
             config_path.parent
             if config_path.name == "PysuiConfig.json"
             else config_path
         )
-        pysuicfg = PysuiConfiguration(from_cfg_path=cpath)
+        pysuicfg = PysuiConfiguration(from_cfg_path=str(cpath))
         for row in cls._CONFIG_ROWS:
             row.query_one("Button").disabled = False
             row.configuration = pysuicfg
@@ -459,7 +460,7 @@ class ConfigIdentities(ConfigRow):
     @work()
     async def add_identity(self):
         alias_list = [x.alias for x in self.configuration_group.alias_list]
-        new_ident: NewIdentity = await self.app.push_screen_wait(
+        new_ident: NewIdentity | None = await self.app.push_screen_wait(
             AddIdentity(alias_list)
         )
 
@@ -554,7 +555,7 @@ class ConfigIdentities(ConfigRow):
             self.configuration.save()
 
     def watch_configuration_group(self, cfg: ProfileGroup):
-        table: EditableDataTable = self.query_one("#config_identities")
+        table: EditableDataTable = self.query_one("#config_identities")  # type: ignore
         # Empty table
         table.clear()
         self.border_title = self.name
@@ -635,7 +636,12 @@ class PyCfgScreen(Screen[None]):
 
     configuration: reactive[PysuiConfiguration | None] = reactive(None, bindings=True)
 
-    def __init__(self, name: str = None, id: str = None, classes: str = None):
+    def __init__(
+        self,
+        name: Optional[str] = None,
+        id: Optional[str] = None,
+        classes: Optional[str] = None,
+    ):
         self.config_sections = [
             ("Groups", ConfigGroup),
             ("Profiles", ConfigProfile),
@@ -708,7 +714,8 @@ class PyCfgScreen(Screen[None]):
             """Called when ConfigSaver is dismissed."""
             if selected:
                 new_fq_path = selected / "PysuiConfig.json"
-                ConfigRow.has_config().save_to(selected)
+                if crc := ConfigRow.has_config():
+                    crc.save_to(selected)
                 # Notify change
                 self.title = f"Pysui Configuration: {new_fq_path}"
                 ConfigRow.config_change(new_fq_path)

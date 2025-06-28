@@ -9,6 +9,8 @@ textual = "*"
 doc8 = "*"
 pysui = "*"
 pathvalidate = "*"
+twine = "*"
+build = "*"
 
 [dev-packages]
 textual-dev = "*"
