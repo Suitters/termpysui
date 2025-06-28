@@ -10,7 +10,10 @@ GraphQL and gRPC URL, keys, account addresses and aliases.
 
 Install
 -------
-`pip install tpysui`
+
+#. Activate, or create and activate, a virtual environment 
+#. Install ``tpysui`` using environment install tools (e.g. pip, pipenv, etc.)
+#. For pip :code:`pip install tpysui` from PyPi
 
 
 
