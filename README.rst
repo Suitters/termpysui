@@ -16,9 +16,9 @@ Features
 * Add, modify or delete Groups, Profiles and Identities
 
 Installing ``tpysui`` will also install ``pysui`` and ``pysui-fastcrypto``
-which requires having Rust installed. See notes in pysui_.
+which requires having Rust installed. See install notes in pysui_.
 
-.. _pysui: https://github.com/FrankC01/pysui/blob/main/README.md#without-rust-on-machine
+.. _pysui: https://github.com/FrankC01/pysui/blob/main/README.md#pysui-sdk-install
 
 Install
 -------
