@@ -27,7 +27,7 @@ dependencies = [
 ]
 
 [project.scripts]
-tpysui = "tpysui:main"
+tpysui = "tpysui.tpysui:main"
 
 [tool.setuptools.dynamic]
 version = { attr = "tpysui.version.__version__" }
