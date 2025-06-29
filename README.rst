@@ -35,10 +35,12 @@ Clone
 #. Clone the github repo
 #. ``cd tpysui``
 #. ``pipenv shell``
+#. If needed manually install ``pysui-fastcrypto``. See install notes in pysui_
 #. ``pipenv install``
 #. ``python -m src.tpysui.tpysui``
 
+Documentation
+-------------
+See Documentation_ for operations help
 
-
-
-
+.. _Documentation: https://github.com/suitters/tpysui/blob/main/docs/tpysui.rst

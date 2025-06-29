@@ -6,5 +6,5 @@
 """Version information for tpysui."""
 
 # Read in command line and posting to PyPi
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 """tpysui Version."""
