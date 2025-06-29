@@ -26,13 +26,13 @@ Install
 Clone
 -----
 
-``tpusui`` uses pipenv, if you have not installed do so.
+``tpusui`` uses pipenv, if you have not installed, do so.
 
 #. Clone the github repo
-#. `cd tpusio`
-#. `pipenv shell`
-#. `pipenv install`
-#. `python -m src.tpysui.tpysui`
+#. ``cd tpusio``
+#. ``pipenv shell``
+#. ``pipenv install``
+#. ``python -m src.tpysui.tpysui``
 
 
 

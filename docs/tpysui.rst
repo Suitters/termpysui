@@ -4,6 +4,11 @@ tpysui - Pysui TUI application to manage PysuiConfigurations
 
 ALPHA ALPHA ALPHA
 
+.. contents:: Operations
+    :depth: 2
+
+Startup
+-------
 When you first run ``tpysui`` you are presented with the following screen.
 
 From there you can:
@@ -15,3 +20,14 @@ From there you can:
    :width: 800px
    :height: 800px
    :alt: Alternative text
+
+Open Existing PysuiConfig.json
+-------------------------------
+
+Create new PysuiConfig.json
+----------------------------
+
+Save to a new PysuiConfig.json
+------------------------------
+
+
