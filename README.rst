@@ -15,6 +15,8 @@ Features
 * Save existing PysuiConfig.json to new PysuiConfig.json file
 * Add, modify or delete Groups, Profiles and Identities
 
+Installing ``tpysui`` will also install ``pysui`` and ``pysui-fastcrypto``
+which requires having Rust installed. See `pysui install notes <https://github.com/FrankC01/pysui>_`
 
 Install
 -------
