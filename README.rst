@@ -29,7 +29,7 @@ Clone
 ``tpusui`` uses pipenv, if you have not installed, do so.
 
 #. Clone the github repo
-#. ``cd tpusio``
+#. ``cd tpysui``
 #. ``pipenv shell``
 #. ``pipenv install``
 #. ``python -m src.tpysui.tpysui``
