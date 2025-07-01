@@ -8,7 +8,7 @@
             "name": "termpysui",
             "type": "debugpy",
             "request": "launch",
-            "module": "src.termpysui.termpysui",
+            "module": "src.tpysui.tpysui",
             "justMyCode": true
         },
         {

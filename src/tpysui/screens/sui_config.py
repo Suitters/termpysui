@@ -5,9 +5,14 @@
 
 """Configuration screen for App."""
 
+import base64
+import dataclasses
 from functools import partial
+import hashlib
+import json
 from pathlib import Path
 from typing import Optional
+import dataclasses_json
 from rich.text import Text
 from textual import work
 from textual.app import ComposeResult
@@ -25,22 +30,36 @@ from textual.widgets import (
 )
 
 from textual.widgets.data_table import RowKey
+import yaml
 
 from ..modals import *
 
 from ..widgets.editable_table import EditableDataTable, CellConfig
 from pysui import PysuiConfiguration
-from pysui.sui.sui_pgql.config.confgroup import ProfileGroup, Profile
+from pysui.sui.sui_pgql.config.confmodel import PysuiConfigModel
+from pysui.sui.sui_crypto import keypair_from_keystring
+from pysui.sui.sui_pgql.config.confgroup import (
+    ProfileGroup,
+    Profile,
+    ProfileKey,
+    ProfileAlias,
+)
+import pysui.sui.sui_pgql.config.conflegacy as legacy
 
 
 class ConfigRow(Container):
     """Base configuration container class."""
 
     _CONFIG_ROWS: list["ConfigRow"] = []
-    configuration: reactive[PysuiConfiguration | None] = reactive(
+
+    CLIENT_YAML: Path = None
+    CLIENT_ALIAS: Path = None
+    CLIENT_KEYS: Path = None
+
+    configuration_group: reactive[ProfileGroup | None] = reactive(
         None, always_update=True
     )
-    configuration_group: reactive[ProfileGroup | None] = reactive(
+    configuration: reactive[legacy.ConfigSui | None] = reactive(
         None, always_update=True
     )
 
@@ -58,27 +77,34 @@ class ConfigRow(Container):
         )
 
     @classmethod
-    def has_config(cls) -> None | PysuiConfiguration:
-        """."""
-        for row in cls._CONFIG_ROWS:
-            if not row.configuration:
-                return None
-            else:
-                return row.configuration
-        return None
+    def load_sui_config(cls, client_path: Path) -> None:
+        """Load the sui configuration from client.yaml"""
+        cls.CLIENT_YAML = client_path
+        cls.CLIENT_ALIAS = client_path.parent / "sui.aliases"
+        # load client.yaml
+        cfg_sui = legacy.ConfigSui.from_dict(
+            yaml.safe_load(cls.CLIENT_YAML.read_text(encoding="utf8"))
+        )
+        # Check sui.keystore
+        cls.CLIENT_KEYS = Path(cfg_sui.keystore.File)
+        if not cls.CLIENT_KEYS.exists():
+            raise ValueError(f"Keystore file {cls.CLIENT_KEYS} does not exist")
+        for srow in cls._CONFIG_ROWS:
+            srow.configuration = cfg_sui
+
+        # # Load sui.aliases
+        # if not cls.CLIENT_ALIAS.exists():
+        #     raise ValueError(f"Alias file {cls.CLIENT_ALIAS} does not exist")
 
     @classmethod
-    def config_change(cls, config_path: Path) -> None:
-        """Dispatch configuration change."""
-        cpath: Path = (
-            config_path.parent
-            if config_path.name == "PysuiConfig.json"
-            else config_path
-        )
-        pysuicfg = PysuiConfiguration(from_cfg_path=str(cpath))
+    def has_config(cls) -> None | Path:
+        """."""
         for row in cls._CONFIG_ROWS:
-            row.query_one("Button").disabled = False
-            row.configuration = pysuicfg
+            if not row.sui_full_cfg_path:
+                return None
+            else:
+                return row.sui_full_cfg_path
+        return None
 
     @classmethod
     def config_group_change(cls, pgroup: ProfileGroup) -> None:
@@ -133,24 +159,13 @@ class ConfigRow(Container):
 
 class ConfigGroup(ConfigRow):
 
-    _CG_HEADER: tuple[str, str] = ("Name", "Active")
+    _CG_HEADER: tuple[str, str] = ("Setting", "Target")
     _CG_EDITS: list[CellConfig] = [
-        CellConfig("Name", True, True),
-        CellConfig(
-            "Active",
-            True,
-            False,
-            None,
-            partial(
-                SingleChoiceDialog, "Switch State", "Change Group Active", ["Yes", "No"]
-            ),
-        ),
+        CellConfig("Setting", False, False),
+        CellConfig("Target", False, False),
     ]
 
     def compose(self):
-        yield Button(
-            "Add", variant="primary", compact=True, id="add_group", disabled=True
-        )
         yield EditableDataTable(self._CG_EDITS, id="config_group")
 
     def validate_group_name(self, table: EditableDataTable, in_value: str) -> bool:
@@ -167,91 +182,9 @@ class ConfigGroup(ConfigRow):
         self.border_title = self.name
         table: EditableDataTable = self.query_one("#config_group")
         table.add_columns(*self._CG_HEADER)
-        self._CG_EDITS[0].validators = [
-            validator.Length(minimum=3, maximum=32),
-            validator.Function(
-                partial(self.validate_group_name, table), "Group name not unique."
-            ),
-        ]
         table.focus()
 
-    @on(Button.Pressed, "#add_group")
-    async def on_add_group(self, event: Button.Pressed) -> None:
-        """
-        Return the user's choice back to the calling application and dismiss the dialog
-        """
-        self.add_group()
-
-    @work()
-    async def add_group(self):
-        new_group: NewGroup = await self.app.push_screen_wait(
-            AddGroup(self.configuration.group_names())
-        )
-        if new_group:
-            table: EditableDataTable = self.query_one("#config_group")
-            prf_grp = ProfileGroup(new_group.name, "", "", [], [], [], [])
-            self.configuration.model.add_group(
-                group=prf_grp, make_active=new_group.active
-            )
-            number = table.row_count + 1
-            label = Text(str(number), style="#B0FC38 italic")
-            table.add_row(
-                *[Text(new_group.name), Text("No")],
-                label=label,
-            )
-            if new_group.active:
-                self.configuration.model.group_active = new_group.name
-                table.switch_active((1, "Yes"), (0, new_group.name), set_focus=True)
-            self.configuration.save()
-            self.config_group_change(self.configuration.active_group)
-
-    def dropping_row(
-        self,
-        from_table: EditableDataTable,
-        row_key: RowKey,
-        row_name: str,
-        active_flag: str,
-    ) -> None:
-        # Change PysuiConfig
-        if from_table.row_count > 1:
-            new_active = self.configuration.model.remove_group(group_name=row_name)
-            # Handle active switch
-            grp_change = None
-            if active_flag == "Yes" and new_active:
-                from_table.switch_active((0, row_name), (0, new_active))
-                grp_change: ProfileGroup = self.configuration.active_group
-            # Delete from table
-            from_table.remove_row(row_key)
-            # Save PysuiConfig
-            self.configuration.save()
-            if grp_change:
-                self.config_group_change(grp_change)
-        else:
-            self.app.push_screen(OkPopup("[red]Can not delete only group"))
-
-    @on(EditableDataTable.CellValueChange)
-    def cell_change(self, cell: EditableDataTable.CellValueChange):
-        """When a cell changes"""
-        if cell.old_value != cell.new_value:
-            # Group has been renamed
-            if cell.cell_config.field_name == "Name":
-                group = self.configuration.model.get_group(group_name=cell.old_value)
-                group.group_name = cell.new_value
-                if self.configuration.model.group_active == cell.old_value:
-                    self.configuration.model.group_active = cell.new_value
-                cell.table.update_cell_at(
-                    cell.coordinates, cell.new_value, update_width=True
-                )
-            # Active status changed
-            elif cell.cell_config.field_name == "Active":
-                new_coord = self._switch_active(cell)
-                gname = str(cell.table.get_cell_at(new_coord))
-                self.configuration.model.group_active = gname
-                group = self.configuration.model.get_group(group_name=gname)
-            self.configuration.save()
-            self.config_group_change(group)
-
-    def watch_configuration(self, cfg: PysuiConfiguration):
+    def watch_configuration(self, cfg: legacy.ConfigSui):
         """Called when a new configuration is selected."""
         if cfg:
             table: EditableDataTable = self.query_one("#config_group")
@@ -259,28 +192,15 @@ class ConfigGroup(ConfigRow):
             table.clear()
             # Iterate group names and capture the active group
             active_row = 0
-            for number, group in enumerate(cfg.group_names(), start=1):
-                label = Text(str(number), style="#B0FC38 italic")
-                if group == cfg.active_group_name:
-                    active = "Yes"
-                    active_row = number - 1
-                else:
-                    active = "No"
-                table.add_row(*[Text(group), Text(active)], label=label)
-            # Select the active row/column
-            table.move_cursor(row=active_row, column=0, scroll=True)
-            # Notify group listeners
-            self.config_group_change(cfg.active_group)
+            label = Text(str(0), style="#B0FC38 italic")
+            table.add_row(*[Text("Active Env"), Text(cfg.active_env)], label=label)
+            label = Text(str(1), style="#B0FC38 italic")
+            table.add_row(*[Text("Active Add."), Text(cfg.active_address)], label=label)
 
-    @on(DataTable.CellSelected)
-    def group_cell_select(self, selected: DataTable.CellSelected):
-        """Handle selection."""
-        # A different group is selected.
-        if selected.coordinate.column == 0 and selected.coordinate.row >= 0:
-            gval = str(selected.value)
-            self.config_group_change(
-                self.configuration.model.get_group(group_name=gval)
-            )
+            # Select the active row/column
+            # table.move_cursor(row=active_row, column=0, scroll=True)
+            # Notify group listeners
+            # self.config_group_change(cfg.active_group)
 
 
 class ConfigProfile(ConfigRow):
@@ -400,32 +320,41 @@ class ConfigProfile(ConfigRow):
                 )
             self.configuration.save()
 
-    def watch_configuration_group(self, cfg: ProfileGroup):
+    def watch_configuration(self, cfg: legacy.ConfigSui):
         table: EditableDataTable = self.query_one("#config_profile")
         # Empty table
         table.clear()
         self.border_title = self.name
         if cfg:
             # Label it
-            self.border_title = self.name + f" in {cfg.group_name}"
+            # self.border_title = self.name + f" in {cfg.group_name}"
             # Setup row label
             counter = 1
             # Build content
             active_row = 0
-            for profile in cfg.profiles:
+            for profile in cfg.envs:
                 label = Text(str(counter), style="#B0FC38 italic")
-                if profile.profile_name == cfg.using_profile:
+                if profile.alias == cfg.active_env:
                     active = "Yes"
                     active_row = counter - 1
                 else:
                     active = "No"
                 table.add_row(
-                    *[Text(profile.profile_name), Text(active), Text(profile.url)],
+                    *[Text(profile.alias), Text(active), Text(profile.rpc)],
                     label=label,
                 )
                 counter += 1
             # Select the active row/column
             table.move_cursor(row=active_row, column=0, scroll=True)
+
+
+@dataclasses.dataclass
+class IdentityBlock(dataclasses_json.DataClassJsonMixin):
+    """Holds alias for base64 public key."""
+
+    aliases: list[ProfileAlias]
+    addresses: list[str]
+    prvkey: list[str]
 
 
 class ConfigIdentities(ConfigRow):
@@ -443,6 +372,19 @@ class ConfigIdentities(ConfigRow):
         CellConfig("Public Key", False),
         CellConfig("Address", False),
     ]
+
+    def __init__(
+        self, *children, name=None, id=None, classes=None, disabled=False, markup=True
+    ):
+        super().__init__(
+            *children,
+            name=name,
+            id=id,
+            classes=classes,
+            disabled=disabled,
+            markup=markup,
+        )
+        self._id_block: IdentityBlock = None
 
     def compose(self):
         yield Button(
@@ -554,51 +496,67 @@ class ConfigIdentities(ConfigRow):
                 self.configuration_group.using_address = addy
             self.configuration.save()
 
-    def watch_configuration_group(self, cfg: ProfileGroup):
+    def watch_configuration(self, cfg: legacy.ConfigSui):
+        if not cfg:
+            return
+        _alias_cache: list[legacy.ProfileAlias] = [
+            legacy.ProfileAlias.from_dict(x)
+            for x in json.loads(self.CLIENT_ALIAS.read_text(encoding="utf8"))
+        ]
+        _prv_keys: list[str] = json.loads(self.CLIENT_KEYS.read_text(encoding="utf8"))
+        _addy_list: list[str] = []
+        for prvkey in _prv_keys:
+            _kp = keypair_from_keystring(prvkey).to_bytes()
+            digest = _kp[0:33] if _kp[0] == 0 else _kp[0:34]
+            pubkey = base64.b64encode(digest).decode()
+            alias = next(
+                filter(lambda pa: pa.public_key_base64 == pubkey, _alias_cache), False
+            )
+            if alias:
+                _addy_list.append(
+                    format(f"0x{hashlib.blake2b(digest, digest_size=32).hexdigest()}")
+                )
+            else:
+                raise ValueError(f"{pubkey} not found in alias list")
+
+        self._id_block = IdentityBlock(_alias_cache, _addy_list, _prv_keys)
         table: EditableDataTable = self.query_one("#config_identities")  # type: ignore
         # Empty table
         table.clear()
-        self.border_title = self.name
-        if cfg:
-            self.border_title = self.name + f" in {cfg.group_name}"
-            # Setup row label
-            counter = 1
-            # Build content
-            active_row = 0
-            indexer = len(cfg.address_list)
-            for i in range(indexer):
-                label = Text(str(i + 1), style="#B0FC38 italic")
-                alias = cfg.alias_list[i]
-                addy = cfg.address_list[i]
-                if addy == cfg.using_address:
-                    active = "Yes"
-                    active_row = i
-                else:
-                    active = "No"
-                table.add_row(
-                    *[
-                        Text(alias.alias),
-                        Text(active),
-                        Text(alias.public_key_base64),
-                        Text(addy),
-                    ],
-                    label=label,
-                )
-            # Select the active row/column
-            table.move_cursor(row=active_row, column=0, scroll=True)
+
+        # Build content
+        active_row = 0
+        for idx, alias in enumerate(self._id_block.aliases):
+            label = Text(str(idx + 1), style="#B0FC38 italic")
+            addy = self._id_block.addresses[idx]
+            if addy == cfg.active_address:
+                active = "Yes"
+                active_row = idx
+            else:
+                active = "No"
+            table.add_row(
+                *[
+                    Text(alias.alias),
+                    Text(active),
+                    Text(alias.public_key_base64),
+                    Text(addy),
+                ],
+                label=label,
+            )
+        table.move_cursor(row=active_row, column=0, scroll=True)
 
 
-class PyCfgScreen(Screen[None]):
+class MystenCfgScreen(Screen[None]):
     """."""
 
     DEFAULT_CSS = """
     $background: black;
     $surface: black;
 
-    #config-header {
-        background:green;
+    #mconfig-header {
+        background:blue;
     }
-    #app-grid {
+    #mapp-grid {
         layout: grid;
         grid-size: 1;
         grid-columns: 1fr;
@@ -630,11 +588,9 @@ class PyCfgScreen(Screen[None]):
 
     BINDINGS = [
         ("ctrl+f", "select", "Select config"),
-        ("ctrl+s", "savecfg", "Save a copy"),
-        ("ctrl+n", "newcfg", "Create a new config"),
     ]
-
-    configuration: reactive[PysuiConfiguration | None] = reactive(None, bindings=True)
+    sui_cnfg_path: reactive[Path | None] = reactive(None, bindings=True)
+    # configuration: reactive[PysuiConfiguration | None] = reactive(None, bindings=True)
 
     def __init__(
         self,
@@ -650,79 +606,79 @@ class PyCfgScreen(Screen[None]):
         super().__init__(name, id, classes)
 
     def compose(self) -> ComposeResult:
-        yield Header(id="config-header")
-        self.title = "Pysui Configuration: (ctrl+f to select)"
-        with Grid(id="app-grid"):
+        yield Header(id="mconfig-header")
+        self.title = "Mysten Client Configuration: (ctrl+f to select)"
+        with Grid(id="mapp-grid"):
             # yield ConfigSelection(id="config-list")
             with Vertical(id="top-right"):
                 for section_name, section_class in self.config_sections:
                     yield section_class(name=section_name)
         yield Footer()
 
-    async def action_newcfg(self) -> None:
-        """Create a new PysuiConfig.yaml."""
-        self.new_configuration()
+    # async def action_newcfg(self) -> None:
+    #     """Create a new PysuiConfig.yaml."""
+    #     self.new_configuration()
 
-    @work()
-    async def new_configuration(self) -> None:
-        """Do the work for creatinig new configuration."""
+    # @work()
+    # async def new_configuration(self) -> None:
+    #     """Do the work for creatinig new configuration."""
 
-        def check_selection(selected: NewConfig | None) -> None:
-            """Called when ConfigSaver is dismissed."""
-            if selected:
-                gen_maps: list[dict] = []
-                if selected.setup_graphql:
-                    gen_maps.append(
-                        {
-                            "name": PysuiConfiguration.SUI_GQL_RPC_GROUP,
-                            "graphql_from_sui": True,
-                            "grpc_from_sui": False,
-                        }
-                    )
-                if selected.setup_grpc:
-                    gen_maps.append(
-                        {
-                            "name": PysuiConfiguration.SUI_GRPC_GROUP,
-                            "graphql_from_sui": False,
-                            "grpc_from_sui": True,
-                        }
-                    )
-                gen_maps.append(
-                    {
-                        "name": PysuiConfiguration.SUI_USER_GROUP,
-                        "graphql_from_sui": False,
-                        "grpc_from_sui": False,
-                        "make_active": True,
-                    }
-                )
-                self.configuration = PysuiConfiguration.initialize_config(
-                    in_folder=selected.config_path, init_groups=gen_maps
-                )
-                ConfigRow.config_change(selected.config_path)
+    #     def check_selection(selected: NewConfig | None) -> None:
+    #         """Called when ConfigSaver is dismissed."""
+    #         if selected:
+    #             gen_maps: list[dict] = []
+    #             if selected.setup_graphql:
+    #                 gen_maps.append(
+    #                     {
+    #                         "name": PysuiConfiguration.SUI_GQL_RPC_GROUP,
+    #                         "graphql_from_sui": True,
+    #                         "grpc_from_sui": False,
+    #                     }
+    #                 )
+    #             if selected.setup_grpc:
+    #                 gen_maps.append(
+    #                     {
+    #                         "name": PysuiConfiguration.SUI_GRPC_GROUP,
+    #                         "graphql_from_sui": False,
+    #                         "grpc_from_sui": True,
+    #                     }
+    #                 )
+    #             gen_maps.append(
+    #                 {
+    #                     "name": PysuiConfiguration.SUI_USER_GROUP,
+    #                     "graphql_from_sui": False,
+    #                     "grpc_from_sui": False,
+    #                     "make_active": True,
+    #                 }
+    #             )
+    #             self.configuration = PysuiConfiguration.initialize_config(
+    #                 in_folder=selected.config_path, init_groups=gen_maps
+    #             )
+    #             ConfigRow.config_change(selected.config_path)
 
-        self.app.push_screen(NewConfiguration(), check_selection)
+    #     self.app.push_screen(NewConfiguration(), check_selection)
 
-    async def action_savecfg(self) -> None:
-        """Save configuration to new location."""
-        self.save_to()
+    # async def action_savecfg(self) -> None:
+    #     """Save configuration to new location."""
+    #     self.save_to()
 
-    @work()
-    async def save_to(self) -> None:
-        """Run save to modal dialog."""
+    # @work()
+    # async def save_to(self) -> None:
+    #     """Run save to modal dialog."""
 
-        def check_selection(selected: Path | None) -> None:
-            """Called when ConfigSaver is dismissed."""
-            if selected:
-                new_fq_path = selected / "PysuiConfig.json"
-                if crc := ConfigRow.has_config():
-                    crc.save_to(selected)
-                # Notify change
-                self.title = f"Pysui Configuration: {new_fq_path}"
-                ConfigRow.config_change(new_fq_path)
-                # Update footer
-                self.configuration = ConfigRow.has_config()
+    #     def check_selection(selected: Path | None) -> None:
+    #         """Called when ConfigSaver is dismissed."""
+    #         if selected:
+    #             new_fq_path = selected / "PysuiConfig.json"
+    #             if crc := ConfigRow.has_config():
+    #                 crc.save_to(selected)
+    #             # Notify change
+    #             self.title = f"Pysui Configuration: {new_fq_path}"
+    #             ConfigRow.config_change(new_fq_path)
+    #             # Update footer
+    #             self.configuration = ConfigRow.has_config()
 
-        self.app.push_screen(ConfigSaver(), check_selection)
+    #     self.app.push_screen(ConfigSaver(), check_selection)
 
     async def action_select(self) -> None:
         self.select_configuration()
@@ -734,16 +690,8 @@ class PyCfgScreen(Screen[None]):
         def check_selection(selected: Path | None) -> None:
             """Called when ConfigPicker is dismissed."""
             if selected:
-                self.title = f"Pysui Configuration: {selected}"
-                ConfigRow.config_change(selected)
-                self.configuration = ConfigRow.has_config()
+                self.title = f"Mysten Client Configuration: {selected}"
+                ConfigRow.load_sui_config(selected)
+                # sui_cnfg_path = ConfigRow.has_config()
 
-        self.app.push_screen(
-            ConfigPicker(config_accept="PysuiConfig.json"), check_selection
-        )
-
-    def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
-        """Check if an action may run."""
-        if action == "savecfg" and self.configuration is None:
-            return None
-        return True
+        self.app.push_screen(ConfigPicker("client.yaml"), check_selection)

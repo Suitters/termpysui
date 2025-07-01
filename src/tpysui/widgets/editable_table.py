@@ -187,20 +187,17 @@ class EditableDataTable(DataTable):
         # Avoid the 'delete' button
         if coords.column != self.delete_column:
             edit_cfg = self.edit_config[coords.column]
+            if edit_cfg.editable == False:
+                return
             if edit_cfg.field_name == "Active" and self.row_count == 1:
                 self.app.push_screen(
                     OkPopup("[red]Can not change Active state for only row")
                 )
             else:
-                if edit_cfg.editable:
-                    if edit_cfg.inline:
-                        self.edit_cell(coordinate=coords, cfg=edit_cfg)
-                    elif edit_cfg.dialog:
-                        self.edit_dialog(coordinate=coords, cfg=edit_cfg)
-            # else:
-            #     self.app.push_screen(
-            #         OkPopup("[red]Can not change Active state for only row")
-            #     )
+                if edit_cfg.inline:
+                    self.edit_cell(coordinate=coords, cfg=edit_cfg)
+                elif edit_cfg.dialog:
+                    self.edit_dialog(coordinate=coords, cfg=edit_cfg)
 
     @work()
     async def edit_dialog(self, coordinate: Coordinate, cfg: CellConfig) -> None:

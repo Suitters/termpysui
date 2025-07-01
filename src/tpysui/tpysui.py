@@ -6,21 +6,24 @@
 """Termpysui TUI Application."""
 
 from textual.app import App
-from .screens import PyCfgScreen
+from textual.binding import Binding
+from .screens import PyCfgScreen, MystenCfgScreen
 
 
 class TermPysuiApp(App):
     """A Textual app to manage configurations."""
 
-    # BINDINGS = [
-    #     Binding("c", "switch_mode('configs')", "Configs", show=False),
-    # ]
+    BINDINGS = [
+        Binding("c", "switch_mode('pycfg')", "Pysui Configs", show=False),
+        Binding("m", "switch_mode('scfgs')", "Mysten Sui Configs", show=False),
+    ]
     MODES = {
-        "configs": lambda: PyCfgScreen(),
+        "pycfg": lambda: PyCfgScreen(),
+        "scfgs": lambda: MystenCfgScreen(),
     }
 
     def on_mount(self) -> None:
-        self.switch_mode("configs")
+        self.switch_mode("pycfg")
 
 
 def main():

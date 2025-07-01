@@ -50,13 +50,19 @@ class ConfigPicker(ModalScreen[Path | None]):
     }
     """
 
+    def __init__(
+        self, config_accept: str, name: str = None, id: str = None, classes: str = None
+    ) -> None:
+        super().__init__(name, id, classes)
+        self.config_accept = config_accept or "PysuiConfig.json"
+
     def compose(self) -> ComposeResult:
         with Horizontal(id="ConfigPopup"):
             yield ConfigDir("~/", classes="dir_list")
 
     @on(DirectoryTree.FileSelected)
     def ft_selected(self, event: DirectoryTree.FileSelected):
-        if event.path.name == "PysuiConfig.json":
+        if event.path.name == self.config_accept:
             self.dismiss(event.path)
 
     async def _on_key(self, event: events.Key) -> None:
