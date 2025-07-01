@@ -160,21 +160,24 @@ class EditableDataTable(DataTable):
             self.table = table
             self.row_key = row_key
 
-    def __init__(self, edit_config: list[CellConfig], **kwargs):
+    def __init__(self, edit_config: list[CellConfig], disable_delete: bool, **kwargs):
         super().__init__(**kwargs)
+        self.delete_disabled = disable_delete
         self.delete_button = "[bold red]Delete"
         self.edit_config = edit_config
         self.delte_column = 0
 
     def add_columns(self, *labels) -> list[ColumnKey]:
         keys = super().add_columns(*labels)
-        self.delete_column = len(keys)
-        super().add_column("", key="delete")
+        if not self.delete_disabled:
+            self.delete_column = len(keys)
+            super().add_column("", key="delete")
         return keys
 
     def add_row(self, *cells, height=1, key=None, label=None) -> RowKey:
         cells = [*cells]
-        cells.append(self.delete_button)
+        if not self.delete_disabled:
+            cells.append(self.delete_button)
         rkey = super().add_row(*tuple(cells), height=height, key=key, label=label)
         return rkey
 

@@ -151,7 +151,7 @@ class ConfigGroup(ConfigRow):
         yield Button(
             "Add", variant="primary", compact=True, id="add_group", disabled=True
         )
-        yield EditableDataTable(self._CG_EDITS, id="config_group")
+        yield EditableDataTable(self._CG_EDITS, disable_delete=False, id="config_group")
 
     def validate_group_name(self, table: EditableDataTable, in_value: str) -> bool:
         """Validate no rename collision."""
@@ -302,7 +302,9 @@ class ConfigProfile(ConfigRow):
         yield Button(
             "Add", variant="primary", compact=True, id="add_profile", disabled=True
         )
-        yield EditableDataTable(self._CP_EDITS, id="config_profile")
+        yield EditableDataTable(
+            self._CP_EDITS, disable_delete=False, id="config_profile"
+        )
 
     @on(Button.Pressed, "#add_profile")
     async def on_add_profile(self, event: Button.Pressed) -> None:
@@ -448,7 +450,9 @@ class ConfigIdentities(ConfigRow):
         yield Button(
             "Add", variant="primary", compact=True, disabled=True, id="add_identity"
         )
-        yield EditableDataTable(self._CI_EDITS, id="config_identities")
+        yield EditableDataTable(
+            self._CI_EDITS, disable_delete=False, id="config_identities"
+        )
 
     @on(Button.Pressed, "#add_identity")
     async def on_add_profile(self, event: Button.Pressed) -> None:

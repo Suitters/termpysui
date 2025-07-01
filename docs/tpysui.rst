@@ -9,14 +9,11 @@ ALPHA ALPHA ALPHA
 
 Startup
 -------
-When you first run ``tpysui`` you are presented with the following screen.
-As you can see, the screen is grouped by 3 tables, each of which continas
-details of specific sections of the PysuiConfig.json file.
+When you first run ``tpysui`` you are presented with the PysuiConfiguration
+management screen screen as shown below.
 
-Initial operations:
-
-* ``ctrl+f`` to open a file pickter to load an existing PysuiConfig.json file
-* ``ctrl+n`` to create a new PysuiConfig.json file
+* Pressing the "m" key - switches to Mysten Sui client.yaml management screen.
+* Pressing the "c" key - switches to PysuiConfiguration management screen.
 
 Once you've opened or created a PysuiConfig.json you can perform changes.
 
@@ -25,18 +22,23 @@ Once you've opened or created a PysuiConfig.json you can perform changes.
    :height: 800px
    :alt: Alternative text
 
-Create new PysuiConfig.json (ctrl+n)
+
+Create new config (ctrl+n)
 ------------------------------------
-If you are a first time user of ``pysui`` then you will want to
-choose this option.
+This is only available in PysuiConfiguration management.
 
-Open Existing PysuiConfig.json (ctrl+f)
----------------------------------------
+If you are a first time user of ``pysui`` then you will want
+to choose this option.
 
-Save to a new PysuiConfig.json (ctrl+s)
----------------------------------------
-This option is only available after creating or loading a
-PysuiConfig.json file.
+Select an existing configuration (ctrl+f)
+-----------------------------------------
+
+Save a copy (ctrl+s)
+--------------------
+This is only available in PysuiConfiguration management.
+
+This option is available after creating or loading a PysuiConfig.json file.
+
 
 Adds, Edits, Deletes
 --------------------

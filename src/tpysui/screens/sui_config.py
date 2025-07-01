@@ -90,6 +90,8 @@ class ConfigRow(Container):
         if not cls.CLIENT_KEYS.exists():
             raise ValueError(f"Keystore file {cls.CLIENT_KEYS} does not exist")
         for srow in cls._CONFIG_ROWS:
+            if not isinstance(srow, ConfigGroup):
+                srow.query_one("Button").disabled = False
             srow.configuration = cfg_sui
 
         # # Load sui.aliases
@@ -166,7 +168,7 @@ class ConfigGroup(ConfigRow):
     ]
 
     def compose(self):
-        yield EditableDataTable(self._CG_EDITS, id="config_group")
+        yield EditableDataTable(self._CG_EDITS, disable_delete=True, id="config_group")
 
     def validate_group_name(self, table: EditableDataTable, in_value: str) -> bool:
         """Validate no rename collision."""
@@ -192,10 +194,12 @@ class ConfigGroup(ConfigRow):
             table.clear()
             # Iterate group names and capture the active group
             active_row = 0
-            label = Text(str(0), style="#B0FC38 italic")
-            table.add_row(*[Text("Active Env"), Text(cfg.active_env)], label=label)
-            label = Text(str(1), style="#B0FC38 italic")
-            table.add_row(*[Text("Active Add."), Text(cfg.active_address)], label=label)
+            label = Text(str(""), style="#B0FC38 italic")
+            table.add_row(*[Text("Active Profile"), Text(cfg.active_env)], label=label)
+            label = Text(str(""), style="#B0FC38 italic")
+            table.add_row(
+                *[Text("Active Address"), Text(cfg.active_address)], label=label
+            )
 
             # Select the active row/column
             # table.move_cursor(row=active_row, column=0, scroll=True)
@@ -222,7 +226,9 @@ class ConfigProfile(ConfigRow):
         yield Button(
             "Add", variant="primary", compact=True, id="add_profile", disabled=True
         )
-        yield EditableDataTable(self._CP_EDITS, id="config_profile")
+        yield EditableDataTable(
+            self._CP_EDITS, disable_delete=False, id="config_profile"
+        )
 
     @on(Button.Pressed, "#add_profile")
     async def on_add_profile(self, event: Button.Pressed) -> None:
@@ -390,7 +396,9 @@ class ConfigIdentities(ConfigRow):
         yield Button(
             "Add", variant="primary", compact=True, disabled=True, id="add_identity"
         )
-        yield EditableDataTable(self._CI_EDITS, id="config_identities")
+        yield EditableDataTable(
+            self._CI_EDITS, disable_delete=False, id="config_identities"
+        )
 
     @on(Button.Pressed, "#add_identity")
     async def on_add_profile(self, event: Button.Pressed) -> None:
