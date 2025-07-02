@@ -6,6 +6,7 @@
 """Configuration screen for App."""
 
 import base64
+from copy import deepcopy
 import dataclasses
 from functools import partial
 import hashlib
@@ -19,11 +20,11 @@ from textual.app import ComposeResult
 from textual.coordinate import Coordinate
 from textual.containers import Vertical, Container, Grid
 from textual import on
+from textual.message import Message
 from textual.reactive import reactive
 from textual.screen import Screen
 import textual.validation as validator
 from textual.widgets import (
-    DataTable,
     Footer,
     Header,
     Button,
@@ -62,6 +63,39 @@ class ConfigRow(Container):
     configuration: reactive[legacy.ConfigSui | None] = reactive(
         None, always_update=True
     )
+
+    class GroupActiveChange(Message):
+        """Raised when the active state of environment changes."""
+
+        def __init__(
+            self,
+            target: str,
+            new_value: str,
+        ):
+            self.new_value: str = new_value
+            self.target = target
+            super().__init__()
+
+    class EnvironmentChange(Message):
+        """Raised when the active state of environment changes.
+
+        This applies to Name and URL.
+        """
+
+        def __init__(
+            self,
+            action: str,
+            env_context: str,
+            target: str,
+            old_value: str,
+            new_value: str,
+        ):
+            self.action: str = action
+            self.env_context: str = env_context
+            self.old_value: str = old_value
+            self.new_value: str = new_value
+            self.target = target
+            super().__init__()
 
     def __init__(
         self, *children, name=None, id=None, classes=None, disabled=False, markup=True
@@ -112,7 +146,8 @@ class ConfigRow(Container):
     def config_group_change(cls, pgroup: ProfileGroup) -> None:
         """Dispatch a change in the active group."""
         for row in cls._CONFIG_ROWS:
-            row.configuration_group = pgroup
+
+            row.configuration = pgroup
 
     def _switch_active(self, cell: EditableDataTable.CellValueChange) -> Coordinate:
         """Change the active row."""
@@ -129,6 +164,49 @@ class ConfigRow(Container):
                 (1, "Yes"), (0, name), set_focus=True
             )
         return new_active_coord
+
+    @on(GroupActiveChange)
+    def handle_active_value_change(self, msg: GroupActiveChange):
+        """Handle a change of active environment or address value."""
+        # Get the configuration main, update appropriate values
+        # and save
+        cfg: legacy.ConfigSui = self._CONFIG_ROWS[0].configuration
+        if msg.target == "address":
+            cfg.active_address = msg.new_value
+        else:
+            cfg.active_env = msg.new_value
+        self.CLIENT_YAML.write_text(yaml.safe_dump(cfg.to_dict()))
+        # Update the visuals
+        self._CONFIG_ROWS[0].handle_active_value_change(msg)
+
+    @on(EnvironmentChange)
+    def handle_env_value_change(self, msg: EnvironmentChange):
+        """."""
+        cfg: legacy.ConfigSui = self._CONFIG_ROWS[0].configuration
+        env_target: legacy.ConfigEnv = None
+        for tenv in cfg.envs:
+            if tenv.alias == msg.env_context:
+                env_target = tenv
+                break
+        if not env_target:
+            raise ValueError(f"{msg.env_context} not found in environment profiles.")
+        if msg.action == "rename":
+            if msg.target == "Name":
+                if cfg.active_env == msg.old_value:
+                    cfg.active_env = msg.new_value
+                    self._CONFIG_ROWS[0].handle_active_value_change(
+                        self.GroupActiveChange("name", msg.new_value)
+                    )
+                env_target.alias = msg.new_value
+            elif msg.target == "URL":
+                env_target.rpc = msg.new_value
+            else:
+                raise ValueError(f"No known property {msg.target}")
+        elif msg.action == "delete":
+            pass
+        else:
+            raise ValueError(f"Action {msg.action} not supported.")
+        self.CLIENT_YAML.write_text(yaml.safe_dump(cfg.to_dict()))
 
     @on(EditableDataTable.RowDelete)
     def group_row_delete(self, selected: EditableDataTable.RowDelete):
@@ -186,29 +264,29 @@ class ConfigGroup(ConfigRow):
         table.add_columns(*self._CG_HEADER)
         table.focus()
 
+    def handle_active_value_change(self, msg: ConfigRow.GroupActiveChange):
+        """Handle a change of active environment or address value."""
+        # Assume it is profile
+        table: EditableDataTable = self.query_one("#config_group")
+        coordinate = Coordinate(0, 1)
+        if msg.target == "address":
+            coordinate = coordinate.down()
+        table.update_cell_at(coordinate, Text(msg.new_value))
+
     def watch_configuration(self, cfg: legacy.ConfigSui):
         """Called when a new configuration is selected."""
         if cfg:
             table: EditableDataTable = self.query_one("#config_group")
             # Empty table
             table.clear()
-            # Iterate group names and capture the active group
-            active_row = 0
-            label = Text(str(""), style="#B0FC38 italic")
-            table.add_row(*[Text("Active Profile"), Text(cfg.active_env)], label=label)
-            label = Text(str(""), style="#B0FC38 italic")
-            table.add_row(
-                *[Text("Active Address"), Text(cfg.active_address)], label=label
-            )
-
-            # Select the active row/column
-            # table.move_cursor(row=active_row, column=0, scroll=True)
-            # Notify group listeners
-            # self.config_group_change(cfg.active_group)
+            # Build basic information
+            table.add_row(*[Text("Active Profile"), Text(cfg.active_env)])
+            table.add_row(*[Text("Active Address"), Text(cfg.active_address)])
 
 
 class ConfigProfile(ConfigRow):
 
+    _PROFILE_NAMES: set[str] = set()
     _CP_HEADER: tuple[str, str] = ("Name", "Active", "URL")
     _CP_EDITS: list[CellConfig] = [
         CellConfig("Name", True, True),
@@ -281,7 +359,7 @@ class ConfigProfile(ConfigRow):
         pre_value = str(table.get_cell_at(coordinate))
         if pre_value == in_value:
             pass
-        elif in_value in self.configuration_group.profile_names:
+        elif in_value in self._PROFILE_NAMES:
             return False
         return True
 
@@ -300,45 +378,55 @@ class ConfigProfile(ConfigRow):
     def cell_change(self, cell: EditableDataTable.CellValueChange):
         """When a cell changes"""
         if cell.old_value != cell.new_value:
-            if cell.cell_config.field_name == "Name":
-                profile = self.configuration_group.get_profile(
-                    profile_name=cell.old_value
-                )
-                profile.profile_name = cell.new_value
-                if self.configuration_group.using_profile == cell.old_value:
-                    self.configuration_group.using_profile = cell.new_value
-                cell.table.update_cell_at(
-                    cell.coordinates, cell.new_value, update_width=True
-                )
-            elif cell.cell_config.field_name == "Active":
+            if cell.cell_config.field_name == "Active":
+                # Active persist is handlee by ConfigRow
                 active_coord = self._switch_active(cell)
-                self.configuration_group.using_profile = str(
-                    cell.table.get_cell_at(active_coord)
+                _ = self.post_message(
+                    ConfigRow.GroupActiveChange(
+                        "profile",
+                        str(cell.table.get_cell_at(active_coord)),
+                    )
                 )
-            elif cell.cell_config.field_name == "URL":
-                profile_name = cell.table.get_cell_at(cell.coordinates.left().left())
-                profile = self.configuration_group.get_profile(
-                    profile_name=str(profile_name)
+            else:
+                # Get the environment name (from either Name or URL)
+                tcoords = (
+                    cell.coordinates
+                    if cell.cell_config.field_name == "Name"
+                    else cell.coordinates.left().left()
                 )
-                profile.url = cell.new_value
+                current_env: str = str(cell.table.get_cell_at(tcoords))
+                # Update the client.yaml
+                _ = self.post_message(
+                    ConfigRow.EnvironmentChange(
+                        "rename",
+                        current_env,
+                        cell.cell_config.field_name,
+                        cell.old_value,
+                        cell.new_value,
+                    )
+                )
+                # Update the table
                 cell.table.update_cell_at(
                     cell.coordinates, cell.new_value, update_width=True
                 )
-            self.configuration.save()
+                # Update allow list
+                if cell.cell_config.field_name == "Name":
+                    self._PROFILE_NAMES = self._PROFILE_NAMES - {cell.old_value} | {
+                        cell.new_value
+                    }
 
     def watch_configuration(self, cfg: legacy.ConfigSui):
         table: EditableDataTable = self.query_one("#config_profile")
         # Empty table
         table.clear()
+        self._PROFILE_NAMES = set()
         self.border_title = self.name
         if cfg:
-            # Label it
-            # self.border_title = self.name + f" in {cfg.group_name}"
-            # Setup row label
             counter = 1
             # Build content
             active_row = 0
             for profile in cfg.envs:
+                self._PROFILE_NAMES.add(profile.alias)
                 label = Text(str(counter), style="#B0FC38 italic")
                 if profile.alias == cfg.active_env:
                     active = "Yes"
@@ -501,8 +589,14 @@ class ConfigIdentities(ConfigRow):
             elif cell.cell_config.field_name == "Active":
                 new_coord = self._switch_active(cell).right().right().right()
                 addy = str(cell.table.get_cell_at(new_coord))
-                self.configuration_group.using_address = addy
-            self.configuration.save()
+                _ = self.post_message(
+                    ConfigRow.ActiveChange(
+                        "address",
+                        addy,
+                    )
+                )
+                # self.configuration_group.using_address = addy
+            # self.configuration.save()
 
     def watch_configuration(self, cfg: legacy.ConfigSui):
         if not cfg:
