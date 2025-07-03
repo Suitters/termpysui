@@ -11,7 +11,7 @@ from .screens import PyCfgScreen, MystenCfgScreen
 
 
 class TermPysuiApp(App):
-    """A Textual app to manage configurations."""
+    """A Textual pysui app to manage configurations."""
 
     BINDINGS = [
         Binding("c", "switch_mode('pycfg')", "Pysui Configs", show=False),
@@ -27,6 +27,9 @@ class TermPysuiApp(App):
 
 
 def main():
+    """
+    main Entry point
+    """
     app = TermPysuiApp()
     app.run()
 

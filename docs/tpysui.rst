@@ -12,15 +12,24 @@ Startup
 When you first run ``tpysui`` you are presented with the PysuiConfiguration
 management screen screen as shown below.
 
-* Pressing the "m" key - switches to Mysten Sui client.yaml management screen.
-* Pressing the "c" key - switches to PysuiConfiguration management screen.
-
-Once you've opened or created a PysuiConfig.json you can perform changes.
 
 .. image:: ./main_screen.png
    :width: 800px
    :height: 800px
-   :alt: Alternative text
+   :alt: PysuiConfig.json
+
+You can swith between the two configuration options
+
+* Pressing the "m" key - switches to Mysten Sui client.yaml management screen.
+* Pressing the "c" key - switches to PysuiConfiguration management screen.
+
+Example of Mysten Sui (client.yanl) after pressing "m"
+
+.. image:: ./main_mysten_screen.png
+   :width: 800px
+   :height: 800px
+   :alt: Mysten client.yaml
+
 
 
 Create new config (ctrl+n)

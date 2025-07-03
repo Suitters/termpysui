@@ -3,7 +3,7 @@
 
 # -*- coding: utf-8 -*-
 
-"""Configuration screen for App."""
+"""Mysten Sui Configuration screen for App."""
 
 import base64
 from copy import deepcopy
@@ -49,7 +49,7 @@ import pysui.sui.sui_pgql.config.conflegacy as legacy
 
 
 class ConfigRow(Container):
-    """Base configuration container class."""
+    """Base configuration grid container class."""
 
     _CONFIG_ROWS: list["ConfigRow"] = []
 
@@ -143,20 +143,6 @@ class ConfigRow(Container):
                 srow.query_one("Button").disabled = False
             srow.configuration = cfg_sui
 
-        # # Load sui.aliases
-        # if not cls.CLIENT_ALIAS.exists():
-        #     raise ValueError(f"Alias file {cls.CLIENT_ALIAS} does not exist")
-
-    @classmethod
-    def has_config(cls) -> None | Path:
-        """."""
-        for row in cls._CONFIG_ROWS:
-            if not row.sui_full_cfg_path:
-                return None
-            else:
-                return row.sui_full_cfg_path
-        return None
-
     def _switch_active(
         self, cell: EditableDataTable.CellValueChange, c_key: ColumnKey
     ) -> Coordinate:
@@ -191,7 +177,7 @@ class ConfigRow(Container):
 
     @on(EnvironmentChange)
     def handle_env_value_change(self, msg: EnvironmentChange):
-        """."""
+        """Handle edits to environment rows."""
         cfg: legacy.ConfigSui = self._CONFIG_ROWS[0].configuration
         env_target: legacy.ConfigEnv = None
         for tenv in cfg.envs:
@@ -218,7 +204,7 @@ class ConfigRow(Container):
 
     @on(EnvironmentAdd)
     def handle_env_add(self, msg: EnvironmentAdd):
-        """."""
+        """Handle additions to the environment (Profile) table."""
         cfg: legacy.ConfigSui = self._CONFIG_ROWS[0].configuration
         env: legacy.ConfigEnv = legacy.ConfigEnv(msg.profile.name, msg.profile.url)
         cfg.envs.append(env)
@@ -231,7 +217,7 @@ class ConfigRow(Container):
 
     @on(EnvironmentDelete)
     def handle_env_del(self, msg: EnvironmentDelete):
-        """."""
+        """Handle delete from the environment (Profile) table."""
         cfg: legacy.ConfigSui = self._CONFIG_ROWS[0].configuration
         if msg.new_active:
             cfg.active_env = msg.new_active
@@ -246,11 +232,17 @@ class ConfigRow(Container):
 
     @on(EditableDataTable.RowDelete)
     def group_row_delete(self, selected: EditableDataTable.RowDelete):
-        """Handle delete"""
+        """Handle delete from the EditTable."""
         self.remove_row(selected.table, selected.row_key)
 
     @work
     async def remove_row(self, data_table: EditableDataTable, row_key: RowKey) -> None:
+        """Work for removing rows
+
+        Args:
+            data_table (EditableDataTable): The focus table (Profile or Identity)
+            row_key (RowKey): Unique row key in table.
+        """
         row_values = [str(value) for value in data_table.get_row(row_key)[:-1]]
         confirmed = await self.app.push_screen_wait(
             ConfirmDeleteRowDialog(
@@ -267,7 +259,17 @@ class ConfigRow(Container):
         row_name: str,
         active_flag: str,
     ) -> None:
-        """Defult row removal."""
+        """dropping_row _summary_
+
+        Args:
+            from_table (EditableDataTable): The focus table (Profile or Identity)
+            row_key (RowKey): Unique row key in table
+            row_name (str): The name column value in the row
+            active_flag (str): Active flag on row indicator
+
+        Raises:
+            NotImplementedError: If not handled by configuration section.
+        """
         raise NotImplementedError(
             f"Drop for '{row_name}' in {row_key} not implemented and active is {active_flag}."
         )
@@ -285,7 +287,7 @@ class ConfigGroup(ConfigRow):
         yield EditableDataTable(self._CG_EDITS, disable_delete=True, id="config_group")
 
     def validate_group_name(self, table: EditableDataTable, in_value: str) -> bool:
-        """Validate no rename collision."""
+        """Validate that there is no same name collision."""
         coordinate = table.cursor_coordinate
         pre_value = str(table.get_cell_at(coordinate))
         if pre_value == in_value:
@@ -365,6 +367,7 @@ class ConfigProfile(ConfigRow):
 
     @work()
     async def add_profile(self):
+        """Work for adding a profile (environment)"""
         new_profile: NewProfile = await self.app.push_screen_wait(
             AddProfile(self._PROFILE_NAMES)
         )
@@ -813,7 +816,7 @@ class MystenCfgScreen(Screen[None]):
     ):
         self.config_sections = [
             ("Groups", ConfigGroup),
-            ("Profiles", ConfigProfile),
+            ("Environment", ConfigProfile),
             ("Identities", ConfigIdentities),
         ]
         super().__init__(name, id, classes)
