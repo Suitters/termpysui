@@ -30,7 +30,7 @@ from textual.widgets import (
     Button,
 )
 
-from textual.widgets.data_table import RowKey
+from textual.widgets.data_table import RowKey, ColumnKey
 import yaml
 
 from ..modals import *
@@ -97,6 +97,24 @@ class ConfigRow(Container):
             self.target = target
             super().__init__()
 
+    class EnvironmentAdd(Message):
+        """Raised when a new environment is defined."""
+
+        def __init__(
+            self,
+            profile: NewProfile,
+        ):
+            self.profile = profile
+            super().__init__()
+
+    class EnvironmentDelete(Message):
+        """Raised when a new environment is defined."""
+
+        def __init__(self, env_context: str, new_active: str):
+            self.env_context: str = env_context
+            self.new_active: str = new_active
+            super().__init__()
+
     def __init__(
         self, *children, name=None, id=None, classes=None, disabled=False, markup=True
     ):
@@ -149,19 +167,21 @@ class ConfigRow(Container):
 
             row.configuration = pgroup
 
-    def _switch_active(self, cell: EditableDataTable.CellValueChange) -> Coordinate:
+    def _switch_active(
+        self, cell: EditableDataTable.CellValueChange, c_key: ColumnKey
+    ) -> Coordinate:
         """Change the active row."""
         new_active_coord: Coordinate = Coordinate(0, 0)
         # The current was 'Active', find an alternative or ignore if solo
         if cell.old_value == "Yes":
-            new_active_coord = cell.table.switch_active(
-                (1, "Yes"), (1, "No"), set_focus=True
+            new_active_coord = cell.table.switch_active_row(
+                (1, "Yes"), (1, "No"), c_key, set_focus=True
             )
         elif cell.new_value == "Yes":
             # Update existing Yes to No and set current to Yes
             name = str(cell.table.get_cell_at(cell.coordinates.left()))
-            new_active_coord = cell.table.switch_active(
-                (1, "Yes"), (0, name), set_focus=True
+            new_active_coord = cell.table.switch_active_row(
+                (1, "Yes"), (0, name), c_key, set_focus=True
             )
         return new_active_coord
 
@@ -202,10 +222,36 @@ class ConfigRow(Container):
                 env_target.rpc = msg.new_value
             else:
                 raise ValueError(f"No known property {msg.target}")
-        elif msg.action == "delete":
-            pass
         else:
             raise ValueError(f"Action {msg.action} not supported.")
+        self.CLIENT_YAML.write_text(yaml.safe_dump(cfg.to_dict()))
+
+    @on(EnvironmentAdd)
+    def handle_env_add(self, msg: EnvironmentAdd):
+        """."""
+        cfg: legacy.ConfigSui = self._CONFIG_ROWS[0].configuration
+        env: legacy.ConfigEnv = legacy.ConfigEnv(msg.profile.name, msg.profile.url)
+        cfg.envs.append(env)
+        if msg.profile.active:
+            cfg.active_env = msg.profile.name
+            self._CONFIG_ROWS[0].handle_active_value_change(
+                self.GroupActiveChange("name", msg.profile.name)
+            )
+        self.CLIENT_YAML.write_text(yaml.safe_dump(cfg.to_dict()))
+
+    @on(EnvironmentDelete)
+    def handle_env_del(self, msg: EnvironmentDelete):
+        """."""
+        cfg: legacy.ConfigSui = self._CONFIG_ROWS[0].configuration
+        if msg.new_active:
+            cfg.active_env = msg.new_active
+            self._CONFIG_ROWS[0].handle_active_value_change(
+                self.GroupActiveChange("name", msg.new_active)
+            )
+        index = next(
+            (i for i, obj in enumerate(cfg.envs) if obj.alias == msg.env_context), None
+        )
+        cfg.envs.pop(index)
         self.CLIENT_YAML.write_text(yaml.safe_dump(cfg.to_dict()))
 
     @on(EditableDataTable.RowDelete)
@@ -287,6 +333,7 @@ class ConfigGroup(ConfigRow):
 class ConfigProfile(ConfigRow):
 
     _PROFILE_NAMES: set[str] = set()
+    _PROFILE_COLUMN_KEYS: list[ColumnKey] = None
     _CP_HEADER: tuple[str, str] = ("Name", "Active", "URL")
     _CP_EDITS: list[CellConfig] = [
         CellConfig("Name", True, True),
@@ -308,6 +355,17 @@ class ConfigProfile(ConfigRow):
             self._CP_EDITS, disable_delete=False, id="config_profile"
         )
 
+    def on_mount(self) -> None:
+        self.border_title = self.name
+        table: EditableDataTable = self.query_one("#config_profile")
+        self._PROFILE_COLUMN_KEYS = table.add_columns(*self._CP_HEADER)
+        self._CP_EDITS[0].validators = [
+            validator.Length(minimum=3, maximum=32),
+            validator.Function(
+                partial(self.validate_profile_name, table), "Profile name not unique."
+            ),
+        ]
+
     @on(Button.Pressed, "#add_profile")
     async def on_add_profile(self, event: Button.Pressed) -> None:
         """
@@ -318,23 +376,26 @@ class ConfigProfile(ConfigRow):
     @work()
     async def add_profile(self):
         new_profile: NewProfile = await self.app.push_screen_wait(
-            AddProfile(self.configuration_group.profile_names)
+            AddProfile(self._PROFILE_NAMES)
         )
         if new_profile:
+            _ = self.post_message(ConfigRow.EnvironmentAdd(new_profile))
+
             table: EditableDataTable = self.query_one("#config_profile")
-            prf = Profile(new_profile.name, new_profile.url)
-            self.configuration_group.add_profile(
-                new_prf=prf, make_active=new_profile.active
-            )
             number = table.row_count + 1
             label = Text(str(number), style="#B0FC38 italic")
-            table.add_row(
+            _ = table.add_row(
                 *[Text(new_profile.name), Text("No"), Text(new_profile.url)],
                 label=label,
             )
+
             if new_profile.active:
-                table.switch_active((1, "Yes"), (0, new_profile.name), set_focus=True)
-            self.configuration.save()
+                table.switch_active_row(
+                    (1, "Yes"),
+                    (0, new_profile.name),
+                    self._PROFILE_COLUMN_KEYS[1],
+                    set_focus=True,
+                )
 
     def dropping_row(
         self,
@@ -343,15 +404,21 @@ class ConfigProfile(ConfigRow):
         row_name: str,
         active_flag: str,
     ) -> None:
-        # Change PysuiConfig
-        new_active = self.configuration_group.remove_profile(profile_name=row_name)
-        # Handle active switch
-        if active_flag == "Yes" and new_active:
-            from_table.switch_active((0, row_name), (0, new_active))
+        """Delete a profile/env row."""
+        new_active_name: str = None
+        # Check if the one being deleted is active
+        # Do the switch if so
+        if active_flag == "Yes":
+            new_coord = from_table.switch_active_row(
+                (0, row_name), (1, "No"), self._PROFILE_COLUMN_KEYS[1]
+            )
+            # new_cord = from_table.switch_active((0, row_name), (1, "No"))
+            new_active_name = str(from_table.get_cell_at(new_coord))
+
+        # Notify persist (ConfigRow)
+        _ = self.post_message(ConfigRow.EnvironmentDelete(row_name, new_active_name))
         # Delete from table
         from_table.remove_row(row_key)
-        # Save PysuiConfig
-        self.configuration.save()
 
     def validate_profile_name(self, table: EditableDataTable, in_value: str) -> bool:
         """Validate no rename collision."""
@@ -363,24 +430,13 @@ class ConfigProfile(ConfigRow):
             return False
         return True
 
-    def on_mount(self) -> None:
-        self.border_title = self.name
-        table: EditableDataTable = self.query_one("#config_profile")
-        table.add_columns(*self._CP_HEADER)
-        self._CP_EDITS[0].validators = [
-            validator.Length(minimum=3, maximum=32),
-            validator.Function(
-                partial(self.validate_profile_name, table), "Profile name not unique."
-            ),
-        ]
-
     @on(EditableDataTable.CellValueChange)
     def cell_change(self, cell: EditableDataTable.CellValueChange):
         """When a cell changes"""
         if cell.old_value != cell.new_value:
             if cell.cell_config.field_name == "Active":
                 # Active persist is handlee by ConfigRow
-                active_coord = self._switch_active(cell)
+                active_coord = self._switch_active(cell, self._PROFILE_COLUMN_KEYS[1])
                 _ = self.post_message(
                     ConfigRow.GroupActiveChange(
                         "profile",
@@ -409,7 +465,7 @@ class ConfigProfile(ConfigRow):
                 cell.table.update_cell_at(
                     cell.coordinates, cell.new_value, update_width=True
                 )
-                # Update allow list
+                # Update allow list and profile keys
                 if cell.cell_config.field_name == "Name":
                     self._PROFILE_NAMES = self._PROFILE_NAMES - {cell.old_value} | {
                         cell.new_value
@@ -433,7 +489,7 @@ class ConfigProfile(ConfigRow):
                     active_row = counter - 1
                 else:
                     active = "No"
-                table.add_row(
+                _ = table.add_row(
                     *[Text(profile.alias), Text(active), Text(profile.rpc)],
                     label=label,
                 )
@@ -526,7 +582,9 @@ class ConfigIdentities(ConfigRow):
             )
             # Settle active
             if new_ident.active:
-                table.switch_active((1, "Yes"), (0, new_ident.alias), set_focus=True)
+                table.switch_active_row(
+                    (1, "Yes"), (0, new_ident.alias), set_focus=True
+                )
             # Add to group
             self.configuration_group.add_keypair_and_parts(
                 new_address=addy,
@@ -548,7 +606,7 @@ class ConfigIdentities(ConfigRow):
         new_active = self.configuration_group.remove_alias(alias_name=row_name)
         # Handle active switch
         if active_flag == "Yes" and new_active:
-            from_table.switch_active((0, row_name), (0, new_active))
+            from_table.switch_active_row((0, row_name), (0, new_active))
         # Delete from table
         from_table.remove_row(row_key)
         # Save PysuiConfig

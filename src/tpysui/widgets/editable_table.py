@@ -256,7 +256,7 @@ class EditableDataTable(DataTable):
             list[Row]: List of Rows that satisfy the criteria.
         """
 
-        def has_value(in_rowc):
+        def has_value(in_rowc: Row):
             """."""
             if str(self.get_row(in_rowc.key)[row_cell]) == value:
                 return True
@@ -265,46 +265,24 @@ class EditableDataTable(DataTable):
 
         return list(filter(has_value, self.ordered_rows))
 
-    def switch_active(
+    def switch_active_row(
         self,
         from_t: tuple[int, str],
         to_t: tuple[int, str],
+        c_key: ColumnKey,
         set_focus: Optional[bool] = False,
     ) -> Coordinate:
-        """switch to new active row.
-
-        Args:
-            from_t (tuple[int, str]): tuple of searchable from row
-            to_t (tuple[int, str]): tuble of searchable to row
-            set_focus (Optional[bool], optional): Change focus. Defaults to False.
-
-        Raises:
-            ValueError: _description_
-
-        Returns:
-            Coordinate: The cooredinat of row name value
-        """
+        """."""
         from_row = self.row_with_value(*from_t)
         to_row = self.row_with_value(*to_t)
-        active_coordinate = None
+        active_coordinate: Coordinate = None
         if from_row:
-            active_coordinate = Coordinate(
-                row=int(str(from_row[0].label)) - 1, column=1
-            )
-            self.update_cell_at(
-                active_coordinate,
-                "No",
-                update_width=False,
-            )
-        # Edge case, we have 1 row (from) and it is moving it's state
+            self.update_cell(from_row[0].key, c_key, "No", update_width=False)
         if to_row:
-            active_coordinate = Coordinate(row=int(str(to_row[0].label)) - 1, column=1)
-            self.update_cell_at(
-                active_coordinate,
-                "Yes",
-                update_width=True,
-            )
+            self.update_cell(to_row[0].key, c_key, "Yes", update_width=True)
+            active_coordinate = self.get_cell_coordinate(to_row[0].key, c_key)
         if set_focus:
             self.focus()
-            self.move_cursor(row=active_coordinate.row, column=0)
+            if active_coordinate:
+                self.move_cursor(row=active_coordinate.row, column=0)
         return active_coordinate.left()

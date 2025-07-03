@@ -24,7 +24,7 @@ from textual.widgets import (
     Button,
 )
 
-from textual.widgets.data_table import RowKey
+from textual.widgets.data_table import RowKey, ColumnKey
 
 from ..modals import *
 
@@ -86,19 +86,21 @@ class ConfigRow(Container):
         for row in cls._CONFIG_ROWS:
             row.configuration_group = pgroup
 
-    def _switch_active(self, cell: EditableDataTable.CellValueChange) -> Coordinate:
+    def _switch_active(
+        self, cell: EditableDataTable.CellValueChange, c_key: ColumnKey
+    ) -> Coordinate:
         """Change the active row."""
         new_active_coord: Coordinate = Coordinate(0, 0)
         # The current was 'Active', find an alternative or ignore if solo
         if cell.old_value == "Yes":
-            new_active_coord = cell.table.switch_active(
-                (1, "Yes"), (1, "No"), set_focus=True
+            new_active_coord = cell.table.switch_active_row(
+                (1, "Yes"), (1, "No"), c_key, set_focus=True
             )
         elif cell.new_value == "Yes":
             # Update existing Yes to No and set current to Yes
             name = str(cell.table.get_cell_at(cell.coordinates.left()))
-            new_active_coord = cell.table.switch_active(
-                (1, "Yes"), (0, name), set_focus=True
+            new_active_coord = cell.table.switch_active_row(
+                (1, "Yes"), (0, name), c_key, set_focus=True
             )
         return new_active_coord
 
@@ -133,6 +135,7 @@ class ConfigRow(Container):
 
 class ConfigGroup(ConfigRow):
 
+    _CG_COLUMN_KEYS: list[ColumnKey] = None
     _CG_HEADER: tuple[str, str] = ("Name", "Active")
     _CG_EDITS: list[CellConfig] = [
         CellConfig("Name", True, True),
@@ -166,7 +169,7 @@ class ConfigGroup(ConfigRow):
     def on_mount(self) -> None:
         self.border_title = self.name
         table: EditableDataTable = self.query_one("#config_group")
-        table.add_columns(*self._CG_HEADER)
+        self._CG_COLUMN_KEYS = table.add_columns(*self._CG_HEADER)
         self._CG_EDITS[0].validators = [
             validator.Length(minimum=3, maximum=32),
             validator.Function(
@@ -201,7 +204,12 @@ class ConfigGroup(ConfigRow):
             )
             if new_group.active:
                 self.configuration.model.group_active = new_group.name
-                table.switch_active((1, "Yes"), (0, new_group.name), set_focus=True)
+                table.switch_active_row(
+                    (1, "Yes"),
+                    (0, new_group.name),
+                    self._CG_COLUMN_KEYS[1],
+                    set_focus=True,
+                )
             self.configuration.save()
             self.config_group_change(self.configuration.active_group)
 
@@ -218,7 +226,9 @@ class ConfigGroup(ConfigRow):
             # Handle active switch
             grp_change = None
             if active_flag == "Yes" and new_active:
-                from_table.switch_active((0, row_name), (0, new_active))
+                from_table.switch_active_row(
+                    (0, row_name), (0, new_active), self._CG_COLUMN_KEYS[1]
+                )
                 grp_change: ProfileGroup = self.configuration.active_group
             # Delete from table
             from_table.remove_row(row_key)
@@ -244,7 +254,7 @@ class ConfigGroup(ConfigRow):
                 )
             # Active status changed
             elif cell.cell_config.field_name == "Active":
-                new_coord = self._switch_active(cell)
+                new_coord = self._switch_active(cell, self._CG_COLUMN_KEYS[1])
                 gname = str(cell.table.get_cell_at(new_coord))
                 self.configuration.model.group_active = gname
                 group = self.configuration.model.get_group(group_name=gname)
@@ -285,6 +295,7 @@ class ConfigGroup(ConfigRow):
 
 class ConfigProfile(ConfigRow):
 
+    _CP_COLUMN_KEYS: list[ColumnKey] = None
     _CP_HEADER: tuple[str, str] = ("Name", "Active", "URL")
     _CP_EDITS: list[CellConfig] = [
         CellConfig("Name", True, True),
@@ -305,6 +316,17 @@ class ConfigProfile(ConfigRow):
         yield EditableDataTable(
             self._CP_EDITS, disable_delete=False, id="config_profile"
         )
+
+    def on_mount(self) -> None:
+        self.border_title = self.name
+        table: EditableDataTable = self.query_one("#config_profile")
+        self._CP_COLUMN_KEYS = table.add_columns(*self._CP_HEADER)
+        self._CP_EDITS[0].validators = [
+            validator.Length(minimum=3, maximum=32),
+            validator.Function(
+                partial(self.validate_profile_name, table), "Profile name not unique."
+            ),
+        ]
 
     @on(Button.Pressed, "#add_profile")
     async def on_add_profile(self, event: Button.Pressed) -> None:
@@ -331,7 +353,12 @@ class ConfigProfile(ConfigRow):
                 label=label,
             )
             if new_profile.active:
-                table.switch_active((1, "Yes"), (0, new_profile.name), set_focus=True)
+                table.switch_active_row(
+                    (1, "Yes"),
+                    (0, new_profile.name),
+                    self._CP_COLUMN_KEYS[1],
+                    set_focus=True,
+                )
             self.configuration.save()
 
     def dropping_row(
@@ -345,7 +372,9 @@ class ConfigProfile(ConfigRow):
         new_active = self.configuration_group.remove_profile(profile_name=row_name)
         # Handle active switch
         if active_flag == "Yes" and new_active:
-            from_table.switch_active((0, row_name), (0, new_active))
+            from_table.switch_active_row(
+                (0, row_name), (0, new_active), self._CP_COLUMN_KEYS[1]
+            )
         # Delete from table
         from_table.remove_row(row_key)
         # Save PysuiConfig
@@ -360,17 +389,6 @@ class ConfigProfile(ConfigRow):
         elif in_value in self.configuration_group.profile_names:
             return False
         return True
-
-    def on_mount(self) -> None:
-        self.border_title = self.name
-        table: EditableDataTable = self.query_one("#config_profile")
-        table.add_columns(*self._CP_HEADER)
-        self._CP_EDITS[0].validators = [
-            validator.Length(minimum=3, maximum=32),
-            validator.Function(
-                partial(self.validate_profile_name, table), "Profile name not unique."
-            ),
-        ]
 
     @on(EditableDataTable.CellValueChange)
     def cell_change(self, cell: EditableDataTable.CellValueChange):
@@ -387,7 +405,7 @@ class ConfigProfile(ConfigRow):
                     cell.coordinates, cell.new_value, update_width=True
                 )
             elif cell.cell_config.field_name == "Active":
-                active_coord = self._switch_active(cell)
+                active_coord = self._switch_active(cell, self._CP_COLUMN_KEYS[1])
                 self.configuration_group.using_profile = str(
                     cell.table.get_cell_at(active_coord)
                 )
@@ -432,6 +450,7 @@ class ConfigProfile(ConfigRow):
 
 class ConfigIdentities(ConfigRow):
 
+    _CI_COLUMN_KEYS: list[ColumnKey] = None
     _CI_HEADER: tuple[str, str, str] = ("Alias", "Active", "Public Key", "Address")
     _CI_EDITS: list[CellConfig] = [
         CellConfig("Alias", True, True),
@@ -453,6 +472,17 @@ class ConfigIdentities(ConfigRow):
         yield EditableDataTable(
             self._CI_EDITS, disable_delete=False, id="config_identities"
         )
+
+    def on_mount(self) -> None:
+        self.border_title = self.name
+        table: EditableDataTable = self.query_one("#config_identities")
+        self._CI_EDITS[0].validators = [
+            validator.Length(minimum=3, maximum=64),
+            validator.Function(
+                partial(self.validate_alias_name, table), "Alias name not unique."
+            ),
+        ]
+        self._CI_COLUMN_KEYS = table.add_columns(*self._CI_HEADER)
 
     @on(Button.Pressed, "#add_identity")
     async def on_add_profile(self, event: Button.Pressed) -> None:
@@ -492,7 +522,12 @@ class ConfigIdentities(ConfigRow):
             )
             # Settle active
             if new_ident.active:
-                table.switch_active((1, "Yes"), (0, new_ident.alias), set_focus=True)
+                table.switch_active_row(
+                    (1, "Yes"),
+                    (0, new_ident.alias),
+                    self._CI_COLUMN_KEYS[1],
+                    set_focus=True,
+                )
             # Add to group
             self.configuration_group.add_keypair_and_parts(
                 new_address=addy,
@@ -514,7 +549,9 @@ class ConfigIdentities(ConfigRow):
         new_active = self.configuration_group.remove_alias(alias_name=row_name)
         # Handle active switch
         if active_flag == "Yes" and new_active:
-            from_table.switch_active((0, row_name), (0, new_active))
+            from_table.switch_active_row(
+                (0, row_name), (0, new_active), self._CI_COLUMN_KEYS[1]
+            )
         # Delete from table
         from_table.remove_row(row_key)
         # Save PysuiConfig
@@ -530,17 +567,6 @@ class ConfigIdentities(ConfigRow):
             return False
         return True
 
-    def on_mount(self) -> None:
-        self.border_title = self.name
-        table: EditableDataTable = self.query_one("#config_identities")
-        self._CI_EDITS[0].validators = [
-            validator.Length(minimum=3, maximum=64),
-            validator.Function(
-                partial(self.validate_alias_name, table), "Alias name not unique."
-            ),
-        ]
-        table.add_columns(*self._CI_HEADER)
-
     @on(EditableDataTable.CellValueChange)
     def cell_change(self, cell: EditableDataTable.CellValueChange):
         """When a cell edit occurs"""
@@ -553,7 +579,12 @@ class ConfigIdentities(ConfigRow):
                     cell.coordinates, cell.new_value, update_width=True
                 )
             elif cell.cell_config.field_name == "Active":
-                new_coord = self._switch_active(cell).right().right().right()
+                new_coord = (
+                    self._switch_active(cell, self._CI_COLUMN_KEYS[1])
+                    .right()
+                    .right()
+                    .right()
+                )
                 addy = str(cell.table.get_cell_at(new_coord))
                 self.configuration_group.using_address = addy
             self.configuration.save()
