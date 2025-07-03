@@ -57,9 +57,6 @@ class ConfigRow(Container):
     CLIENT_ALIAS: Path = None
     CLIENT_KEYS: Path = None
 
-    configuration_group: reactive[ProfileGroup | None] = reactive(
-        None, always_update=True
-    )
     configuration: reactive[legacy.ConfigSui | None] = reactive(
         None, always_update=True
     )
@@ -159,13 +156,6 @@ class ConfigRow(Container):
             else:
                 return row.sui_full_cfg_path
         return None
-
-    @classmethod
-    def config_group_change(cls, pgroup: ProfileGroup) -> None:
-        """Dispatch a change in the active group."""
-        for row in cls._CONFIG_ROWS:
-
-            row.configuration = pgroup
 
     def _switch_active(
         self, cell: EditableDataTable.CellValueChange, c_key: ColumnKey
@@ -509,6 +499,7 @@ class IdentityBlock(dataclasses_json.DataClassJsonMixin):
 
 class ConfigIdentities(ConfigRow):
 
+    _CI_COLUMN_KEYS: list[ColumnKey] = None
     _CI_HEADER: tuple[str, str, str] = ("Alias", "Active", "Public Key", "Address")
     _CI_EDITS: list[CellConfig] = [
         CellConfig("Alias", True, True),
@@ -544,6 +535,17 @@ class ConfigIdentities(ConfigRow):
             self._CI_EDITS, disable_delete=False, id="config_identities"
         )
 
+    def on_mount(self) -> None:
+        self.border_title = self.name
+        table: EditableDataTable = self.query_one("#config_identities")
+        self._CI_EDITS[0].validators = [
+            validator.Length(minimum=3, maximum=64),
+            validator.Function(
+                partial(self.validate_alias_name, table), "Alias name not unique."
+            ),
+        ]
+        self._CI_COLUMN_KEYS = table.add_columns(*self._CI_HEADER)
+
     @on(Button.Pressed, "#add_identity")
     async def on_add_profile(self, event: Button.Pressed) -> None:
         """
@@ -553,14 +555,14 @@ class ConfigIdentities(ConfigRow):
 
     @work()
     async def add_identity(self):
-        alias_list = [x.alias for x in self.configuration_group.alias_list]
+        alias_list = [x.alias for x in self._id_block.aliases]
         new_ident: NewIdentity | None = await self.app.push_screen_wait(
             AddIdentity(alias_list)
         )
 
         if new_ident:
             # Generate the new key based on user input
-            mnem, addy, prfkey, prfalias = self.configuration_group.new_keypair_parts(
+            mnem, addy, prfkey, prfalias = ProfileGroup.new_keypair_parts(
                 of_keytype=new_ident.key_scheme,
                 word_counts=new_ident.word_count,
                 derivation_path=new_ident.derivation_path,
@@ -580,20 +582,42 @@ class ConfigIdentities(ConfigRow):
                 ],
                 label=label,
             )
+            # Add to _id_block
+            self._id_block.addresses.append(addy)
+            self._id_block.aliases.append(prfalias)
+            self._id_block.prvkey.append(prfkey.private_key_base64)
             # Settle active
             if new_ident.active:
-                table.switch_active_row(
-                    (1, "Yes"), (0, new_ident.alias), set_focus=True
+                coord: Coordinate = (
+                    table.switch_active_row(
+                        (1, "Yes"),
+                        (0, new_ident.alias),
+                        self._CI_COLUMN_KEYS[1],
+                        set_focus=True,
+                    )
+                    .right()
+                    .right()
+                    .right()
                 )
-            # Add to group
-            self.configuration_group.add_keypair_and_parts(
-                new_address=addy,
-                new_alias=prfalias,
-                new_key=prfkey,
-                make_active=new_ident.active,
+
+                addy = str(table.get_cell_at(coord))
+                _ = self.post_message(
+                    ConfigRow.GroupActiveChange(
+                        "address",
+                        addy,
+                    )
+                )
+
+            # Persist updated aliases
+            self.CLIENT_ALIAS.write_text(
+                json.dumps([x.to_dict() for x in self._id_block.aliases], indent=2),
+                encoding="utf8",
+            )
+            # Persist updated private Keys
+            self.CLIENT_KEYS.write_text(
+                json.dumps(self._id_block.prvkey, indent=2), encoding="utf8"
             )
             _ = await self.app.push_screen_wait(NewKey(mnem, prfkey.private_key_base64))
-            self.configuration.save()
 
     def dropping_row(
         self,
@@ -602,15 +626,47 @@ class ConfigIdentities(ConfigRow):
         row_name: str,
         active_flag: str,
     ) -> None:
-        # Change PysuiConfig
-        new_active = self.configuration_group.remove_alias(alias_name=row_name)
+        # Find the index
+        a_index = None
+        for index, alias in enumerate(self._id_block.aliases):
+            if alias.alias == row_name:
+                a_index = index
+                # Pop the address and private key
+                self._id_block.addresses.pop(a_index)
+                self._id_block.prvkey.pop(a_index)
+        if not a_index:
+            raise ValueError(f"Unable to find alias {row_name} in identities")
+        # Pop the alias
+        self._id_block.aliases.pop(a_index)
         # Handle active switch
-        if active_flag == "Yes" and new_active:
-            from_table.switch_active_row((0, row_name), (0, new_active))
-        # Delete from table
+        if active_flag == "Yes":
+            coord = (
+                from_table.switch_active_row(
+                    (0, row_name), (1, "No"), self._CI_COLUMN_KEYS[1]
+                )
+                .right()
+                .right()
+                .right()
+            )
+            addy = str(from_table.get_cell_at(coord))
+            _ = self.post_message(
+                ConfigRow.GroupActiveChange(
+                    "address",
+                    addy,
+                )
+            )
+
+        # Delete row from table
         from_table.remove_row(row_key)
-        # Save PysuiConfig
-        self.configuration.save()
+        # Persist updated aliases
+        self.CLIENT_ALIAS.write_text(
+            json.dumps([x.to_dict() for x in self._id_block.aliases], indent=2),
+            encoding="utf8",
+        )
+        # Persist updated private Keys
+        self.CLIENT_KEYS.write_text(
+            json.dumps(self._id_block.prvkey, indent=2), encoding="utf8"
+        )
 
     def validate_alias_name(self, table: EditableDataTable, in_value: str) -> bool:
         """Validate no rename collision."""
@@ -618,43 +674,42 @@ class ConfigIdentities(ConfigRow):
         pre_value = str(table.get_cell_at(coordinate))
         if pre_value == in_value:
             pass
-        elif in_value in [x.alias for x in self.configuration_group.alias_list]:
+        elif in_value in [x.alias for x in self._id_block.aliases]:
             return False
         return True
-
-    def on_mount(self) -> None:
-        self.border_title = self.name
-        table: EditableDataTable = self.query_one("#config_identities")
-        self._CI_EDITS[0].validators = [
-            validator.Length(minimum=3, maximum=64),
-            validator.Function(
-                partial(self.validate_alias_name, table), "Alias name not unique."
-            ),
-        ]
-        table.add_columns(*self._CI_HEADER)
 
     @on(EditableDataTable.CellValueChange)
     def cell_change(self, cell: EditableDataTable.CellValueChange):
         """When a cell edit occurs"""
         if cell.old_value != cell.new_value:
             if cell.cell_config.field_name == "Alias":
-                for pfa in self.configuration_group.alias_list:
+                # With alias name change, update the _id_block and write
+                # to sui.aliases
+                for pfa in self._id_block.aliases:
                     if pfa.alias == cell.old_value:
                         pfa.alias = cell.new_value
                 cell.table.update_cell_at(
                     cell.coordinates, cell.new_value, update_width=True
                 )
+                self.CLIENT_ALIAS.write_text(
+                    json.dumps([x.to_dict() for x in self._id_block.aliases], indent=2),
+                    encoding="utf8",
+                )
+
             elif cell.cell_config.field_name == "Active":
-                new_coord = self._switch_active(cell).right().right().right()
+                new_coord = (
+                    self._switch_active(cell, self._CI_COLUMN_KEYS[1])
+                    .right()
+                    .right()
+                    .right()
+                )
                 addy = str(cell.table.get_cell_at(new_coord))
                 _ = self.post_message(
-                    ConfigRow.ActiveChange(
+                    ConfigRow.GroupActiveChange(
                         "address",
                         addy,
                     )
                 )
-                # self.configuration_group.using_address = addy
-            # self.configuration.save()
 
     def watch_configuration(self, cfg: legacy.ConfigSui):
         if not cfg:
@@ -749,8 +804,6 @@ class MystenCfgScreen(Screen[None]):
     BINDINGS = [
         ("ctrl+f", "select", "Select config"),
     ]
-    sui_cnfg_path: reactive[Path | None] = reactive(None, bindings=True)
-    # configuration: reactive[PysuiConfiguration | None] = reactive(None, bindings=True)
 
     def __init__(
         self,
@@ -775,71 +828,6 @@ class MystenCfgScreen(Screen[None]):
                     yield section_class(name=section_name)
         yield Footer()
 
-    # async def action_newcfg(self) -> None:
-    #     """Create a new PysuiConfig.yaml."""
-    #     self.new_configuration()
-
-    # @work()
-    # async def new_configuration(self) -> None:
-    #     """Do the work for creatinig new configuration."""
-
-    #     def check_selection(selected: NewConfig | None) -> None:
-    #         """Called when ConfigSaver is dismissed."""
-    #         if selected:
-    #             gen_maps: list[dict] = []
-    #             if selected.setup_graphql:
-    #                 gen_maps.append(
-    #                     {
-    #                         "name": PysuiConfiguration.SUI_GQL_RPC_GROUP,
-    #                         "graphql_from_sui": True,
-    #                         "grpc_from_sui": False,
-    #                     }
-    #                 )
-    #             if selected.setup_grpc:
-    #                 gen_maps.append(
-    #                     {
-    #                         "name": PysuiConfiguration.SUI_GRPC_GROUP,
-    #                         "graphql_from_sui": False,
-    #                         "grpc_from_sui": True,
-    #                     }
-    #                 )
-    #             gen_maps.append(
-    #                 {
-    #                     "name": PysuiConfiguration.SUI_USER_GROUP,
-    #                     "graphql_from_sui": False,
-    #                     "grpc_from_sui": False,
-    #                     "make_active": True,
-    #                 }
-    #             )
-    #             self.configuration = PysuiConfiguration.initialize_config(
-    #                 in_folder=selected.config_path, init_groups=gen_maps
-    #             )
-    #             ConfigRow.config_change(selected.config_path)
-
-    #     self.app.push_screen(NewConfiguration(), check_selection)
-
-    # async def action_savecfg(self) -> None:
-    #     """Save configuration to new location."""
-    #     self.save_to()
-
-    # @work()
-    # async def save_to(self) -> None:
-    #     """Run save to modal dialog."""
-
-    #     def check_selection(selected: Path | None) -> None:
-    #         """Called when ConfigSaver is dismissed."""
-    #         if selected:
-    #             new_fq_path = selected / "PysuiConfig.json"
-    #             if crc := ConfigRow.has_config():
-    #                 crc.save_to(selected)
-    #             # Notify change
-    #             self.title = f"Pysui Configuration: {new_fq_path}"
-    #             ConfigRow.config_change(new_fq_path)
-    #             # Update footer
-    #             self.configuration = ConfigRow.has_config()
-
-    #     self.app.push_screen(ConfigSaver(), check_selection)
-
     async def action_select(self) -> None:
         self.select_configuration()
 
@@ -852,6 +840,5 @@ class MystenCfgScreen(Screen[None]):
             if selected:
                 self.title = f"Mysten Client Configuration: {selected}"
                 ConfigRow.load_sui_config(selected)
-                # sui_cnfg_path = ConfigRow.has_config()
 
         self.app.push_screen(ConfigPicker("client.yaml"), check_selection)
