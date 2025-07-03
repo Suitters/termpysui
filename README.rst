@@ -26,7 +26,7 @@ Install
 
 #. Activate, or create and activate, a virtual environment
 #. Install ``tpysui`` using environment install tools (e.g. pip, pipenv, etc.)
-#. For pip :code:`pip install tpysui` from PyPi
+#. For pip :code:`pip install tpysui` from PyPi. See install notes in pysui_
 #. Run :code:`tpysui` from command line
 
 Clone
