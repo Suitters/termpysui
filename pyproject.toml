@@ -6,13 +6,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tpysui"
-description = 'PysuiConfiguration Editor'
+description = 'Pysui and Configuration Editors'
 dynamic = ["version","readme"]
 requires-python = ">=3.10.6"
 license = "Apache-2.0"
 keywords = ["pysui","editor","configuration","software development kit", "sui", "blockchain"]
 classifiers = [
-  "Development Status :: 3 - Alpha",
+  "Development Status :: 4 - Beta",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
@@ -21,7 +21,7 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-    "textual < 4.0.0, >= 3.3.0",
+    "textual < 6.0.0, >= 5.1.1",
     "pysui < 0.90.0, >= 0.86.0",
     "pathvalidate < 4.0.0, >= 3.3.1",
 ]

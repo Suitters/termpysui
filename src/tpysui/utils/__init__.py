@@ -3,7 +3,6 @@
 
 # -*- coding: utf-8 -*-
 
-"""TermPysui central."""
+"""Utilities."""
 
-from .screens import PyCfgScreen, MystenCfgScreen
-from .modals import *
+from .genpy import generate_python

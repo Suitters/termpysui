@@ -4,13 +4,13 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-pip = "*"
-textual = "*"
 doc8 = "*"
 pysui = "*"
 pathvalidate = "*"
 twine = "*"
 build = "*"
+pip = "*"
+textual = "*"
 
 [dev-packages]
 textual-dev = "*"

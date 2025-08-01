@@ -1,8 +1,8 @@
-=============================================================
-tpysui - Pysui TUI application to manage PysuiConfigurations
-=============================================================
+====================================================================
+tpysui - Pysui TUI application to manage Pysui or Sui Configurations
+====================================================================
 
-ALPHA ALPHA ALPHA
+BETA BETA BETA
 
 A console TUI. Currently supports managing (create/edit)
 PysuiConfig.json as well as Mysten SUI client.yaml.

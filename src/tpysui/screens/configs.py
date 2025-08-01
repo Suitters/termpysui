@@ -12,7 +12,7 @@ from rich.text import Text
 from textual import work
 from textual.app import ComposeResult
 from textual.coordinate import Coordinate
-from textual.containers import Vertical, Container, Grid
+from textual.containers import Vertical, Container, Grid, HorizontalGroup
 from textual import on
 from textual.reactive import reactive
 from textual.screen import Screen
@@ -27,8 +27,9 @@ from textual.widgets import (
 from textual.widgets.data_table import RowKey, ColumnKey
 
 from ..modals import *
-
 from ..widgets.editable_table import EditableDataTable, CellConfig
+from ..utils import generate_python
+
 from pysui import PysuiConfiguration
 from pysui.sui.sui_pgql.config.confgroup import ProfileGroup, Profile
 
@@ -58,8 +59,8 @@ class ConfigRow(Container):
         )
 
     @classmethod
-    def has_config(cls) -> None | PysuiConfiguration:
-        """."""
+    def get_config(cls) -> None | PysuiConfiguration:
+        """Gets the configuration in play else None."""
         for row in cls._CONFIG_ROWS:
             if not row.configuration:
                 return None
@@ -76,8 +77,20 @@ class ConfigRow(Container):
             else config_path
         )
         pysuicfg = PysuiConfiguration(from_cfg_path=str(cpath))
-        for row in cls._CONFIG_ROWS:
-            row.query_one("Button").disabled = False
+        for index, row in enumerate(cls._CONFIG_ROWS):
+            if index == 0:
+                gnames: list[str] = pysuicfg.group_names()
+                for idx, rb in enumerate(row.query("Button").nodes):
+                    if idx == 0:
+                        rb.disabled = False
+                    elif idx == 1 and PysuiConfiguration.SUI_GRPC_GROUP not in gnames:
+                        rb.disabled = False
+                    elif (
+                        idx == 2 and PysuiConfiguration.SUI_GQL_RPC_GROUP not in gnames
+                    ):
+                        rb.disabled = False
+            else:
+                row.query_one("Button").disabled = False
             row.configuration = pysuicfg
 
     @classmethod
@@ -151,9 +164,28 @@ class ConfigGroup(ConfigRow):
     ]
 
     def compose(self):
-        yield Button(
-            "Add", variant="primary", compact=True, id="add_group", disabled=True
-        )
+        with HorizontalGroup():
+            yield Button(
+                "Add",
+                compact=True,
+                variant="primary",
+                id="add_group",
+                disabled=True,
+            )
+            yield Button(
+                "Add gRPC Group",
+                compact=True,
+                variant="primary",
+                id="add_grpc_group",
+                disabled=True,
+            )
+            yield Button(
+                "Add GraphQL Group",
+                compact=True,
+                variant="primary",
+                id="add_graphql_group",
+                disabled=True,
+            )
         yield EditableDataTable(self._CG_EDITS, disable_delete=False, id="config_group")
 
     def validate_group_name(self, table: EditableDataTable, in_value: str) -> bool:
@@ -178,12 +210,89 @@ class ConfigGroup(ConfigRow):
         ]
         table.focus()
 
-    @on(Button.Pressed, "#add_group")
-    async def on_add_group(self, event: Button.Pressed) -> None:
+    def _update_button_state(self):
+        gnames: list[str] = self.configuration.group_names()
+        grpc_b = self.query_one("#add_grpc_group", Button)
+        if PysuiConfiguration.SUI_GRPC_GROUP in gnames:
+            grpc_b.disabled = True
+        else:
+            grpc_b.disabled = False
+        graphql_b = self.query_one("#add_graphql_group", Button)
+        if PysuiConfiguration.SUI_GQL_RPC_GROUP in gnames:
+            graphql_b.disabled = True
+        else:
+            graphql_b.disabled = False
+
+    def _insert_new_group(self, group: ProfileGroup, make_active: bool):
+        """Insert a group into the current configuraiton and update UI.
+
+        Args:
+            group (ProfileGroup): The PysuiConfiguration group being added
+            make_active (bool): If this group should become the active group
         """
-        Return the user's choice back to the calling application and dismiss the dialog
+        table: EditableDataTable = self.query_one("#config_group")
+        self.configuration.model.add_group(group=group, make_active=make_active)
+        number = table.row_count + 1
+        label = Text(str(number), style="#B0FC38 italic")
+
+        table.add_row(
+            *[Text(group.group_name), Text("No")],
+            label=label,
+        )
+        if make_active:
+            self.configuration.model.group_active = group.group_name
+            table.switch_active_row(
+                (1, "Yes"),
+                (0, group.group_name),
+                self._CG_COLUMN_KEYS[1],
+                set_focus=True,
+            )
+        self.configuration.save()
+        self._update_button_state()
+        self.config_group_change(self.configuration.active_group)
+
+    @on(Button.Pressed)
+    async def handle_button_pressed(self, event: Button.Pressed) -> None:
+        """Handle button presses for creating new groups.
+
+        Adding gRPC or GraphQL default groups only enabled if the
+        standard names don't already exist in the configuration.
+
+        Args:
+            event (Button.Pressed): The button pressed message
         """
-        self.add_group()
+        if event.button.id == "add_grpc_group":
+            prf_grp = ProfileGroup(
+                PysuiConfiguration.SUI_GRPC_GROUP,
+                "devnet",
+                "",
+                [],
+                [],
+                [],
+                [
+                    Profile("devnet", "fullnode.devnet.sui.io:443"),
+                    Profile("testnet", "fullnode.testnet.sui.io:443"),
+                    Profile("mainnet", "fullnode.mainnet.sui.io:443"),
+                ],
+            )
+            self._insert_new_group(group=prf_grp, make_active=True)
+        elif event.button.id == "add_graphql_group":
+            prf_grp = ProfileGroup(
+                PysuiConfiguration.SUI_GQL_RPC_GROUP,
+                "devnet",
+                "",
+                [],
+                [],
+                [],
+                [
+                    Profile("devnet", "https://sui-devnet.mystenlabs.com/graphql"),
+                    Profile("testnet", "https://sui-testnet.mystenlabs.com/graphql"),
+                    Profile("mainnet", "https://sui-mainnetnet.mystenlabs.com/graphql"),
+                ],
+            )
+            self._insert_new_group(group=prf_grp, make_active=True)
+        elif event.button.id == "add_group":
+            self.add_group()
 
     @work()
     async def add_group(self):
@@ -191,27 +300,8 @@ class ConfigGroup(ConfigRow):
             AddGroup(self.configuration.group_names())
         )
         if new_group:
-            table: EditableDataTable = self.query_one("#config_group")
             prf_grp = ProfileGroup(new_group.name, "", "", [], [], [], [])
-            self.configuration.model.add_group(
-                group=prf_grp, make_active=new_group.active
-            )
-            number = table.row_count + 1
-            label = Text(str(number), style="#B0FC38 italic")
-            table.add_row(
-                *[Text(new_group.name), Text("No")],
-                label=label,
-            )
-            if new_group.active:
-                self.configuration.model.group_active = new_group.name
-                table.switch_active_row(
-                    (1, "Yes"),
-                    (0, new_group.name),
-                    self._CG_COLUMN_KEYS[1],
-                    set_focus=True,
-                )
-            self.configuration.save()
-            self.config_group_change(self.configuration.active_group)
+            self._insert_new_group(group=prf_grp, make_active=new_group.active)
 
     def dropping_row(
         self,
@@ -232,6 +322,8 @@ class ConfigGroup(ConfigRow):
                 grp_change: ProfileGroup = self.configuration.active_group
             # Delete from table
             from_table.remove_row(row_key)
+            # Update add buttons
+            self._update_button_state()
             # Save PysuiConfig
             self.configuration.save()
             if grp_change:
@@ -258,6 +350,7 @@ class ConfigGroup(ConfigRow):
                 gname = str(cell.table.get_cell_at(new_coord))
                 self.configuration.model.group_active = gname
                 group = self.configuration.model.get_group(group_name=gname)
+            self._update_button_state()
             self.configuration.save()
             self.config_group_change(group)
 
@@ -643,6 +736,9 @@ class PyCfgScreen(Screen[None]):
         height: 100%;
         background: $panel;
     }    
+    Button {
+        margin-right: 1;
+    }
     ConfigRow {
         padding: 1 1;
         border-title-color: green;
@@ -651,7 +747,7 @@ class PyCfgScreen(Screen[None]):
         border: white;
         background: $background;
         height:2fr;
-        margin-right: 1;
+        margin-right: 1;        
     }
     EditableDataTable {
         border: gray;
@@ -666,6 +762,7 @@ class PyCfgScreen(Screen[None]):
     BINDINGS = [
         ("ctrl+f", "select", "Select config"),
         ("ctrl+s", "savecfg", "Save a copy"),
+        ("ctrl+g", "genstub", "Generate a Pyton stub"),
         ("ctrl+n", "newcfg", "Create a new config"),
     ]
 
@@ -749,13 +846,53 @@ class PyCfgScreen(Screen[None]):
             """Called when ConfigSaver is dismissed."""
             if selected:
                 new_fq_path = selected / "PysuiConfig.json"
-                if crc := ConfigRow.has_config():
+                if crc := ConfigRow.get_config():
                     crc.save_to(selected)
                 # Notify change
                 self.title = f"Pysui Configuration: {new_fq_path}"
                 ConfigRow.config_change(new_fq_path)
                 # Update footer
-                self.configuration = ConfigRow.has_config()
+                self.configuration = ConfigRow.get_config()
+
+        self.app.push_screen(ConfigSaver(), check_selection)
+
+    async def action_genstub(self) -> None:
+        """Generate a Python stub"""
+        self.gen_to()
+
+    @work()
+    async def gen_to(self) -> None:
+        """Fetch a location."""
+
+        def check_selection(selected: GenSpec | None) -> None:
+            """Called when ConfigSaver is dismissed."""
+            if selected:
+                generate_python(
+                    gen_spec=selected,
+                    from_config=ConfigRow.get_config(),
+                )
+
+        self.app.push_screen(ConfigGener(), check_selection)
+
+    async def action_savecfg(self) -> None:
+        """Save configuration to new location."""
+        self.save_to()
+
+    @work()
+    async def save_to(self) -> None:
+        """Run save to modal dialog."""
+
+        def check_selection(selected: Path | None) -> None:
+            """Called when ConfigSaver is dismissed."""
+            if selected:
+                new_fq_path = selected / "PysuiConfig.json"
+                if crc := ConfigRow.get_config():
+                    crc.save_to(selected)
+                # Notify change
+                self.title = f"Pysui Configuration: {new_fq_path}"
+                ConfigRow.config_change(new_fq_path)
+                # Update footer
+                self.configuration = ConfigRow.get_config()
 
         self.app.push_screen(ConfigSaver(), check_selection)
 
@@ -771,7 +908,7 @@ class PyCfgScreen(Screen[None]):
             if selected:
                 self.title = f"Pysui Configuration: {selected}"
                 ConfigRow.config_change(selected)
-                self.configuration = ConfigRow.has_config()
+                self.configuration = ConfigRow.get_config()
 
         self.app.push_screen(
             ConfigPicker(config_accept="PysuiConfig.json"), check_selection
@@ -779,6 +916,6 @@ class PyCfgScreen(Screen[None]):
 
     def check_action(self, action: str, parameters: tuple[object, ...]) -> bool | None:
         """Check if an action may run."""
-        if action == "savecfg" and self.configuration is None:
+        if action in ["savecfg", "gensub", "edit"] and self.configuration is None:
             return None
         return True

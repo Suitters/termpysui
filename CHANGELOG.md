@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - Unpublished
+
+**BREAKING CHANGE** Triggering editing a cell in a configuration table has changed from the "e" key to "ctrl+e".
+
+### Added
+
+- [enhancement](https://github.com/Suitters/tpysui/issues/2) Generate GraphQL or gRPC stub
+
+### Fixed
+
+- [bug](https://github.com/Suitters/tpysui/issues/3) Exception attempting edit (`e`) on empty table
+- [bug](https://github.com/Suitters/tpysui/issues/4) Deleting more than one row in same table throws exception
+
+### Changed
+
+- In 'New Identity' dialog, a Select dropdown for keys replaced the RadioSet.
+- Editing a configuration cell now is triggered by "ctrl+e" instead of just "e".
+
+### Removed
 
 ## [0.2.0] - 2025-07-03
 

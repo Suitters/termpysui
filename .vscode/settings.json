@@ -33,9 +33,9 @@
     "MD007":false
   },
   "autoDocstring.docstringFormat": "google",
-  "autoDocstring.generateDocstringOnEnter": true,
   "autoDocstring.guessTypes": true,
-  "autoDocstring.includeName": true,
+  "autoDocstring.generateDocstringOnEnter": true,
+  "autoDocstring.includeName": false,
   "[python]": {
     "editor.defaultFormatter": "ms-python.black-formatter",
     "editor.formatOnSave": true,

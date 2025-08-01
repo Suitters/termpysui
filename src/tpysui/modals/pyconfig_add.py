@@ -6,7 +6,7 @@
 """Pysui Configuration Add Modals."""
 
 import dataclasses
-
+import re
 from textual.app import ComposeResult
 from textual import events, on
 from textual.containers import (
@@ -17,7 +17,14 @@ from textual.containers import (
 from textual.screen import ModalScreen, ScreenResultType
 import textual.validation as validator
 from textual.widget import Widget
-from textual.widgets import Input, Button, Checkbox, Header, RadioSet, Label
+from textual.widgets import (
+    Input,
+    Button,
+    Checkbox,
+    Header,
+    Select,
+    Label,
+)
 
 from pysui.abstracts.client_keypair import SignatureScheme
 
@@ -55,7 +62,7 @@ class AddBase(ModalScreen[ScreenResultType]):
     }
     VerticalScroll {
         width: 50%;
-        height: 50%;
+        height: 70%;
         border: white 80%;
         content-align: center middle;
         margin: 1;
@@ -172,6 +179,15 @@ class AddProfile(AddBase[NewProfile | None]):
     """Add profile dialog that accepts a name, url and active flag."""
 
     TITLE = "Add a new Profile"
+    REGGIE = re.compile(
+        (
+            "((http|https)://)(www.)?"
+            + "[a-zA-Z0-9@:%._\\\\+~#?&amp;//=]"
+            + "{2,256}\\\\.[a-z]"
+            + "{2,6}\\\\b([-a-zA-Z0-9@:%"
+            + "._\\\\+~#?&amp;//=]*)"
+        )
+    )
 
     def post_mount(self, event: events.Mount, container: Widget) -> None:
         """Called post mount for adding new widgets."""
@@ -181,7 +197,7 @@ class AddProfile(AddBase[NewProfile | None]):
                     Input(
                         placeholder="Enter profile URL",
                         classes="input_field",
-                        validators=[validator.URL()],
+                        validators=[validator.Regex(self.REGGIE)],
                         id="profile_url",
                     ),
                     before=idx,
@@ -211,15 +227,24 @@ class AddIdentity(AddBase[NewIdentity | None]):
 
     TITLE = "Add a new Identity"
 
+    def __init__(self, config_names, name=None, id=None, classes=None):
+        super().__init__(config_names, name, id, classes)
+        self.ktindex = -1
+
     def post_mount(self, event: events.Mount, container: Widget) -> None:
         """Called post mount for adding new widgets."""
+        key_types = (
+            ["Ed25519", 0],
+            ["Secp256k1", 1],
+            ["Secp256r1", 2],
+        )
         for idx, widg in enumerate(container.children):
             if isinstance(widg, Checkbox):
                 container.mount(
-                    RadioSet(
-                        "ED25519",
-                        "SECP256K1",
-                        "SECP256R1",
+                    Select(
+                        key_types,
+                        prompt="Select a Key type",
+                        tooltip="The type used for generating a private key",
                         id="id_keytype",
                         classes="margin_one",
                     ),
@@ -241,8 +266,9 @@ class AddIdentity(AddBase[NewIdentity | None]):
                 )
                 break
 
-    def on_radio_set_changed(self, event: RadioSet.Changed) -> None:
-        self.ktindex = event.radio_set.pressed_index
+    @on(Select.Changed)
+    def select_changed(self, event: Select.Changed) -> None:
+        self.ktindex = event.value
 
     @on(Button.Pressed, "#choice-ok")
     def on_ok(self, event: Button.Pressed) -> None:
@@ -254,7 +280,7 @@ class AddIdentity(AddBase[NewIdentity | None]):
             ialias.focus()
             return
 
-        if self.ktindex < 0:
+        if 0 <= self.ktindex <= 2:
             self.query_one("#id_keytype").focus()
 
         idwc = self.query_one("#id_word_count", Input).value

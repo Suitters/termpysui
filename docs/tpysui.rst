@@ -1,8 +1,8 @@
-=============================================================
-tpysui - Pysui TUI application to manage PysuiConfigurations
-=============================================================
+====================================================================
+tpysui - Pysui TUI application to manage Pysui or Sui Configurations
+====================================================================
 
-ALPHA ALPHA ALPHA
+BETA BETA BETA
 
 .. contents:: Operations
     :depth: 2
@@ -62,15 +62,34 @@ Add Button
 The Add button over each section, when clicked, will popup a relevant
 dialog box (i.e. Add Group, Add Profile, Add Identity).
 
+Add gRPC Group
+^^^^^^^^^^^^^^
+PysuiConfiguration only!
+Note: This button is disabled if said group already exists.
+
+This will add a group: ``sui_grpc_config`` with standard
+Mysten gRPC profiles (URLS).
+
+You will need to add Identities for addresses/keys.
+
+Add GraphQL Group
+^^^^^^^^^^^^^^^^^
+PysuiConfiguration only!
+Note: This button is disabled if said group already exists.
+
+This will add a group: ``sui_gql_config`` with standard
+Mysten GraphQL profiles (URLS).
+
+You will need to add Identities for addresses/keys.
+
 Adding Identities
 ^^^^^^^^^^^^^^^^^
-
 The dialog supports generating identies for ED25199, SECP256k1 or SECP256r1
 
 
 Field Edits
 ***********
-Selecting a field in any table and then pressing the ``e`` key allows
+Selecting a field in any table and then pressing ``ctrl+e`` keys allows
 you to change that field.
 
 Groups

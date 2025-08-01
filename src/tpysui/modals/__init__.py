@@ -5,7 +5,7 @@
 
 """Modal dialogs package."""
 
-from .configfm import ConfigSaver, ConfigPicker
+from .configfm import ConfigSaver, ConfigPicker, ConfigGener, GenSpec
 from .confirm import NewKey, ConfirmDeleteRowDialog, OkPopup
 from .pyconfig_add import (
     AddGroup,
@@ -21,6 +21,8 @@ from .pyconfig_new import NewConfiguration, NewConfig
 __all__ = [
     "ConfigSaver",
     "ConfigPicker",
+    "ConfigGener",
+    "GenSpec",
     "NewKey",
     "ConfirmDeleteRowDialog",
     "OkPopup",
