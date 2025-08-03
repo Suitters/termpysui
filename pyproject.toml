@@ -22,7 +22,7 @@ classifiers = [
 ]
 dependencies = [
     "textual < 6.0.0, >= 5.1.1",
-    "pysui < 0.90.0, >= 0.86.0",
+    "pysui < 0.90.0, >= 0.87.0",
     "pathvalidate < 4.0.0, >= 3.3.1",
 ]
 

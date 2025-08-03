@@ -37,15 +37,15 @@ from ..modals import *
 
 from ..widgets.editable_table import EditableDataTable, CellConfig
 from pysui import PysuiConfiguration
-from pysui.sui.sui_pgql.config.confmodel import PysuiConfigModel
 from pysui.sui.sui_crypto import keypair_from_keystring
-from pysui.sui.sui_pgql.config.confgroup import (
+from pysui.sui.sui_common.config.confmodel import PysuiConfigModel
+from pysui.sui.sui_common.config.confgroup import (
     ProfileGroup,
     Profile,
     ProfileKey,
     ProfileAlias,
 )
-import pysui.sui.sui_pgql.config.conflegacy as legacy
+import pysui.sui.sui_common.config.conflegacy as legacy
 
 
 class ConfigRow(Container):

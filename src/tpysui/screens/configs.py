@@ -31,7 +31,7 @@ from ..widgets.editable_table import EditableDataTable, CellConfig
 from ..utils import generate_python
 
 from pysui import PysuiConfiguration
-from pysui.sui.sui_pgql.config.confgroup import ProfileGroup, Profile
+from pysui.sui.sui_common.config.confgroup import ProfileGroup, Profile
 
 
 class ConfigRow(Container):
@@ -262,37 +262,67 @@ class ConfigGroup(ConfigRow):
             event (Button.Pressed): The button pressed message
         """
         if event.button.id == "add_grpc_group":
-            prf_grp = ProfileGroup(
-                PysuiConfiguration.SUI_GRPC_GROUP,
-                "devnet",
-                "",
-                [],
-                [],
-                [],
-                [
-                    Profile("devnet", "fullnode.devnet.sui.io:443"),
-                    Profile("testnet", "fullnode.testnet.sui.io:443"),
-                    Profile("mainnet", "fullnode.mainnet.sui.io:443"),
-                ],
+            self.insert_standard_group(
+                ProfileGroup(
+                    PysuiConfiguration.SUI_GRPC_GROUP,
+                    "devnet",
+                    "",
+                    [],
+                    [],
+                    [],
+                    [
+                        Profile("devnet", "fullnode.devnet.sui.io:443"),
+                        Profile("testnet", "fullnode.testnet.sui.io:443"),
+                        Profile("mainnet", "fullnode.mainnet.sui.io:443"),
+                    ],
+                ),
             )
-            self._insert_new_group(group=prf_grp, make_active=True)
         elif event.button.id == "add_graphql_group":
-            prf_grp = ProfileGroup(
-                PysuiConfiguration.SUI_GQL_RPC_GROUP,
-                "devnet",
-                "",
-                [],
-                [],
-                [],
-                [
-                    Profile("devnet", "https://sui-devnet.mystenlabs.com/graphql"),
-                    Profile("testnet", "https://sui-testnet.mystenlabs.com/graphql"),
-                    Profile("mainnet", "https://sui-mainnetnet.mystenlabs.com/graphql"),
-                ],
+            self.insert_standard_group(
+                ProfileGroup(
+                    PysuiConfiguration.SUI_GQL_RPC_GROUP,
+                    "devnet",
+                    "",
+                    [],
+                    [],
+                    [],
+                    [
+                        Profile("devnet", "https://sui-devnet.mystenlabs.com/graphql"),
+                        Profile(
+                            "testnet", "https://sui-testnet.mystenlabs.com/graphql"
+                        ),
+                        Profile(
+                            "mainnet", "https://sui-mainnetnet.mystenlabs.com/graphql"
+                        ),
+                    ],
+                )
             )
-            self._insert_new_group(group=prf_grp, make_active=True)
         elif event.button.id == "add_group":
             self.add_group()
+
+    @work()
+    async def insert_standard_group(self, target_pgroup: ProfileGroup):
+        from_group: list[str] = []
+        for gname in self.configuration.group_names():
+            agrp = self.configuration.model.get_group(group_name=gname)
+            if agrp.key_list:
+                from_group.append(gname)
+
+        if from_group:
+            igrp: InjectConfig
+            if igrp := await self.app.push_screen_wait(
+                InjectGroup(target_pgroup.group_name, from_group)
+            ):
+                if igrp.keys_from:
+                    kgroup: ProfileGroup = self.configuration.model.get_group(
+                        group_name=igrp.keys_from
+                    )
+                    target_pgroup.alias_list = kgroup.alias_list
+                    target_pgroup.key_list = kgroup.key_list
+                    target_pgroup.address_list = kgroup.address_list
+                    target_pgroup.using_address = kgroup.using_address
+
+        self._insert_new_group(group=target_pgroup, make_active=True)
 
     @work()
     async def add_group(self):

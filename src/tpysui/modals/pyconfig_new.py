@@ -6,6 +6,7 @@
 """New PysuiConfiguration Modal."""
 
 import dataclasses
+import functools
 from pathlib import Path
 from pathvalidate import ValidationError, validate_filepath
 
@@ -15,10 +16,20 @@ from textual.containers import (
     Horizontal,
     HorizontalGroup,
     Vertical,
+    VerticalScroll,
+    Center,
 )
 from textual.screen import ModalScreen
 import textual.validation as validator
-from textual.widgets import Input, Button, Header, SelectionList, Label
+from textual.widgets import (
+    Input,
+    Button,
+    Header,
+    SelectionList,
+    Label,
+    RadioSet,
+    RadioButton,
+)
 from .configfm import ConfigFolder
 
 
@@ -154,6 +165,103 @@ class NewConfiguration(ModalScreen[NewConfig | None]):
         )
         if selected:
             self.query_one(Input).value = str(selected)
+
+    async def _on_key(self, event: events.Key) -> None:
+        if event.name == "escape":
+            self.dismiss(None)
+
+
+@dataclasses.dataclass
+class InjectConfig:
+    group_name: str
+    keys_from: str | None = None
+
+
+class InjectGroup(ModalScreen[InjectConfig | None]):
+    """."""
+
+    DEFAULT_CSS = """
+        InjectGroup {
+            
+            align: center middle;
+
+            & VerticalScroll {
+                width: 50%;
+                height: 70%;
+                border: white 80%;
+                background: $panel;
+                border: $secondary round;
+                content-align: center middle;
+                margin: 1;
+
+                & Label {
+                    align: center middle;
+                    height: auto;
+                    margin: 1;
+                }
+
+                & .group_gen {
+                    margin: 1;
+                    border: white;
+                    width: 70%;
+                    height: auto;
+                }    
+                & Center {
+                    & Horizontal {
+                        & Button {
+                            width: 20%;
+                            height: 20%;
+                            margin: 1;        
+                        }
+                    }
+                }
+            }
+        }    
+    """
+    TITLE = "Create a mew PysuiConfiguration"
+
+    def __init__(
+        self,
+        insert_group: str,
+        groups_with_keys: list[str],
+        name: str | None = None,
+        id: str | None = None,
+        classes: str | None = None,
+    ):
+        super().__init__(name, id, classes)
+        self.insert_group = insert_group
+        self.groups_with_keys = groups_with_keys
+
+    def compose(self) -> ComposeResult:
+        """
+        Create the widgets for the new configation user interface
+        """
+        pfunc = functools.partial(RadioSet, RadioButton("None"))
+        for nname in self.groups_with_keys:
+            pfunc = functools.partial(pfunc, RadioButton(nname))
+        yield Header()
+        with VerticalScroll():
+            yield Label(f"Add identities for {self.insert_group} from:")
+            yield pfunc(classes="group_gen")
+            yield Center(
+                Horizontal(
+                    Button("OK", variant="primary", id="choice-ok"),
+                    Button("Cancel", variant="error", id="choice-cancel"),
+                )
+            )
+
+    async def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "choice-ok":
+            rbselect: RadioButton | None = self.query_one(
+                RadioSet, RadioSet
+            ).pressed_button
+            self.dismiss(
+                InjectConfig(
+                    self.insert_group, str(rbselect.label) if rbselect else None
+                )
+            )
+        elif event.button.id == "choice-cancel":
+            self.dismiss(None)
 
     async def _on_key(self, event: events.Key) -> None:
         if event.name == "escape":

@@ -70,7 +70,9 @@ Note: This button is disabled if said group already exists.
 This will add a group: ``sui_grpc_config`` with standard
 Mysten gRPC profiles (URLS).
 
-You will need to add Identities for addresses/keys.
+If there are other groups that have identities, a popup will
+ask if you want to copy identities from one of them. You will need to
+add Identities for addresses/keys.
 
 Add GraphQL Group
 ^^^^^^^^^^^^^^^^^
@@ -80,7 +82,9 @@ Note: This button is disabled if said group already exists.
 This will add a group: ``sui_gql_config`` with standard
 Mysten GraphQL profiles (URLS).
 
-You will need to add Identities for addresses/keys.
+If there are other groups that have identities, a popup will
+ask if you want to copy identities from one of them. You will need to
+add Identities for addresses/keys.
 
 Adding Identities
 ^^^^^^^^^^^^^^^^^

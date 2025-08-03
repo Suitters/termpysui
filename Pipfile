@@ -5,12 +5,12 @@ name = "pypi"
 
 [packages]
 doc8 = "*"
-pysui = "*"
 pathvalidate = "*"
 twine = "*"
 build = "*"
 pip = "*"
 textual = "*"
+pysui = "*"
 
 [dev-packages]
 textual-dev = "*"
