@@ -236,13 +236,14 @@ class InjectGroup(ModalScreen[InjectConfig | None]):
         """
         Create the widgets for the new configation user interface
         """
-        pfunc = functools.partial(RadioSet, RadioButton("None"))
-        for nname in self.groups_with_keys:
-            pfunc = functools.partial(pfunc, RadioButton(nname))
+
         yield Header()
         with VerticalScroll():
             yield Label(f"Add identities for {self.insert_group} from:")
-            yield pfunc(classes="group_gen")
+            yield RadioSet(
+                RadioButton("None"),
+                *[RadioButton(group) for group in self.groups_with_keys],
+            )
             yield Center(
                 Horizontal(
                     Button("OK", variant="primary", id="choice-ok"),

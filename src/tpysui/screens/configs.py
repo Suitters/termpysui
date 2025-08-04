@@ -322,7 +322,7 @@ class ConfigGroup(ConfigRow):
                     target_pgroup.address_list = kgroup.address_list
                     target_pgroup.using_address = kgroup.using_address
 
-        self._insert_new_group(group=target_pgroup, make_active=True)
+                self._insert_new_group(group=target_pgroup, make_active=True)
 
     @work()
     async def add_group(self):
